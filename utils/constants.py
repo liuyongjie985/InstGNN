@@ -11,7 +11,8 @@ from torch.utils.tensorboard import SummaryWriter
 # Supported datasets - currently only Cora
 class DatasetType(enum.Enum):
     CORA = 0,
-    PPI = 1
+    PPI = 1,
+    SOGOU = 2
 
 
 # Networkx is not precisely made with drawing as it's main feature but I experimented with it a bit
@@ -50,7 +51,7 @@ PATIENCE_CNT = 0
 
 BINARIES_PATH = os.path.join(os.path.dirname(__file__), os.pardir, 'models', 'binaries')
 CHECKPOINTS_PATH = os.path.join(os.path.dirname(__file__), os.pardir, 'models', 'checkpoints')
-DATA_DIR_PATH = os.path.join(os.path.dirname(__file__), os.pardir, 'data')
+DATA_DIR_PATH = os.path.join(os.path.dirname(__file__), os.pardir, '../data')
 
 # Make sure these exist as the rest of the code assumes it
 os.makedirs(BINARIES_PATH, exist_ok=True)
@@ -61,14 +62,15 @@ os.makedirs(CHECKPOINTS_PATH, exist_ok=True)
 #
 
 CORA_PATH = os.path.join(DATA_DIR_PATH, 'cora')  # this is checked-in no need to make a directory
-
+SOGOU_PATH = os.path.join(DATA_DIR_PATH, 'sogou')
 # Thomas Kipf et al. first used this split in GCN paper and later Petar Veličković et al. in GAT paper
 CORA_TRAIN_RANGE = [0, 140]
 CORA_VAL_RANGE = [140, 140 + 500]
 CORA_TEST_RANGE = [1708, 1708 + 1000]
 CORA_NUM_INPUT_FEATURES = 1433
-CORA_NUM_CLASSES = 7
-
+SOGOU_NUM_INPUT_FEATURES = 27
+# CORA_NUM_CLASSES = 7
+SOGOU_NUM_CLASSES = 7
 network_repository_cora_url = r'http://networkrepository.com/graphvis.php?d=./data/gsm50/labeled/cora.edges'
 
 # Used whenever we need to plot points from different class (like t-SNE in playground.py and CORA visualization)

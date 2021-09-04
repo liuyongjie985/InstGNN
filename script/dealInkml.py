@@ -1,6 +1,4 @@
 import numpy as np
-from skimage.draw import line
-from skimage.morphology import thin
 import matplotlib.pyplot as plt
 import xml.etree.ElementTree as ET
 import json
@@ -35,11 +33,10 @@ def get_traces_data(inkml_file_abs_path, doc_namespace="{http://www.w3.org/2003/
 
     traces_all = [{'id': trace_tag.get('id'),
                    'coords': [
-                       [round(float(axis_coord)) \
+                       [float(axis_coord) \
                         for axis_coord in coord[1:].split(' ')] if coord.startswith(' ') \
-                           else [round(
-                           float(axis_coord)) \
-                           for axis_coord in coord.split(' ')] \
+                           else [float(axis_coord) \
+                                 for axis_coord in coord.split(' ')] \
                        for coord in (trace_tag.text).replace('\n', '').split(',')]} \
                   for trace_tag in root.findall(doc_namespace + 'trace')]
 
@@ -71,72 +68,6 @@ def get_traces_data(inkml_file_abs_path, doc_namespace="{http://www.w3.org/2003/
         [traces_data.append({'trace_group': [trace['coords']]}) for trace in traces_all]
 
     return traces_all, traces_data
-
-
-def convert_to_imgs(traces_data, box_size=int(100)):
-    patterns_enc = []
-    classes_rejected = []
-
-    for pattern in traces_data:
-        trace_group = pattern['trace_group']
-        'mid coords needed to shift the pattern'
-        min_x, min_y, max_x, max_y = get_min_coords(trace_group)
-
-        'traceGroup dimensions'
-        trace_grp_height, trace_grp_width = max_y - min_y, max_x - min_x
-
-        'shift pattern to its relative position'
-        shifted_trace_grp = shift_trace_grp(trace_group, min_x=min_x, min_y=min_y)
-
-        'Interpolates a pattern so that it fits into a box with specified size'
-        'method: LINEAR INTERPOLATION'
-        try:
-            interpolated_trace_grp = interpolate(shifted_trace_grp, \
-                                                 trace_grp_height=trace_grp_height, trace_grp_width=trace_grp_width,
-                                                 box_size=box_size - 1)
-        except Exception as e:
-            print(e)
-            print('This data is corrupted - skipping.')
-            classes_rejected.append(pattern.get('label'))
-            continue
-
-        'Get min, max coords once again in order to center scaled patter inside the box'
-        min_x, min_y, max_x, max_y = get_min_coords(interpolated_trace_grp)
-
-        centered_trace_grp = center_pattern(interpolated_trace_grp, max_x=max_x, max_y=max_y, box_size=box_size)
-
-        'Center scaled pattern so it fits a box with specified size'
-        pattern_drawn = draw_pattern(centered_trace_grp, box_size=box_size)
-        # Make sure that patterns are thinned (1 pixel thick)
-        pat_thinned = 1.0 - thin(1.0 - np.asarray(pattern_drawn))
-        plt.imshow(pat_thinned, cmap='gray')
-        plt.show()
-        pattern_enc = dict({'features': pat_thinned, 'label': pattern.get('label')})
-
-        # Filter classes that belong to categories selected by the user
-        #             if pattern_enc.get('label') in self.classes:
-
-        patterns_enc.append(pattern_enc)
-
-    return patterns_enc, classes_rejected
-
-
-def get_min_coords(trace_group):
-    min_x_coords = []
-    min_y_coords = []
-    max_x_coords = []
-    max_y_coords = []
-
-    for trace in trace_group:
-        x_coords = [coord[0] for coord in trace]
-        y_coords = [coord[1] for coord in trace]
-
-        min_x_coords.append(min(x_coords))
-        min_y_coords.append(min(y_coords))
-        max_x_coords.append(max(x_coords))
-        max_y_coords.append(max(y_coords))
-
-    return min(min_x_coords), min(min_y_coords), max(max_x_coords), max(max_y_coords)
 
 
 def shift_trace_grp(trace_group, min_x, min_y):
@@ -179,53 +110,11 @@ def interpolate(trace_group, trace_grp_height, trace_grp_width, box_size):
     return interpolated_trace_grp
 
 
-def get_min_coords(trace_group):
-    min_x_coords = []
-    min_y_coords = []
-    max_x_coords = []
-    max_y_coords = []
-
-    for trace in trace_group:
-        x_coords = [coord[0] for coord in trace]
-        y_coords = [coord[1] for coord in trace]
-
-        min_x_coords.append(min(x_coords))
-        min_y_coords.append(min(y_coords))
-        max_x_coords.append(max(x_coords))
-        max_y_coords.append(max(y_coords))
-
-    return min(min_x_coords), min(min_y_coords), max(max_x_coords), max(max_y_coords)
-
-
 def center_pattern(trace_group, max_x, max_y, box_size):
     x_margin = int((box_size - max_x) / 2)
     y_margin = int((box_size - max_y) / 2)
 
     return shift_trace_grp(trace_group, min_x=-x_margin, min_y=-y_margin)
-
-
-def draw_pattern(trace_group, box_size):
-    pattern_drawn = np.ones(shape=(box_size, box_size), dtype=np.float32)
-    for trace in trace_group:
-
-        ' SINGLE POINT TO DRAW '
-        if len(trace) == 1:
-            x_coord = trace[0][0]
-            y_coord = trace[0][1]
-            pattern_drawn[y_coord, x_coord] = 0.0
-
-        else:
-            ' TRACE HAS MORE THAN 1 POINT '
-
-            'Iterate through list of traces endpoints'
-            for pt_idx in range(len(trace) - 1):
-                print(pt_idx, trace[pt_idx])
-
-                'Indices of pixels that belong to the line. May be used to directly index into an array'
-                pattern_drawn[line(r0=int(trace[pt_idx][1]), c0=int(trace[pt_idx][0]),
-                                   r1=int(trace[pt_idx + 1][1]), c1=int(trace[pt_idx + 1][0]))] = 0
-
-    return pattern_drawn
 
 
 def _distanceQuickSort(matrix_row, matrix_row_index):
@@ -276,7 +165,7 @@ def graph_build(traces, group_data):
             remove_id_map[int(stroke["id"])] = i
             i += 1
         else:
-            print("移除了一个点")
+            print("移除了一个笔画")
     group_matrix = [[[0, None] for x in range(len(all_traces))] for y in range(len(all_traces))]
     stroke2label = {}
     for strokeGroup in group_data:
@@ -308,7 +197,7 @@ def graph_build(traces, group_data):
     # distance_matrix_index = [[x for x in range(12)],
     #                          [x for x in range(12)]]
 
-    print(all_traces)
+    # print(all_traces)
     sorted_distance_matrix, sorted_distance_matrix_index = distanceQuickSort(distance_matrix, distance_matrix_index)
     # print("sorted_distance_matrix", sorted_distance_matrix)
     # print("sorted_distance_matrix_index", sorted_distance_matrix_index)
@@ -324,10 +213,9 @@ def graph_build(traces, group_data):
     for i, stroke in enumerate(all_traces):
         temp_stroke_feature = []
         # node feature table see 【腾讯文档】流程图数据集前处理 https://docs.qq.com/doc/DWVVmaVdBQmd1Z29N
-        if i == 5:
-            print("i", i)
+
         border_points, total_area, rectangularity, ratioOfThePrincipalAxis, intersection, major_vector, width, height, bbox = getConvexHullArea(
-            stroke)
+            stroke.copy())
 
         md.addNum(height)
 
@@ -433,15 +321,21 @@ def graph_build(traces, group_data):
             temp_spatial_length_deviation = temp_spatial_length_deviation ** 0.5
             temp_stroke_feature.append(temp_spatial_length_deviation)
         # 22 - 25
-        temp_stroke_feature.append(bbox[0][0])
-        temp_stroke_feature.append(bbox[0][1])
-        temp_stroke_feature.append(bbox[2][0])
-        temp_stroke_feature.append(bbox[2][1])
-
+        if bbox != None:
+            temp_stroke_feature.append(bbox[0][0])
+            temp_stroke_feature.append(bbox[0][1])
+            temp_stroke_feature.append(bbox[2][0])
+            temp_stroke_feature.append(bbox[2][1])
+        else:
+            temp_stroke_feature.append(0)
+            temp_stroke_feature.append(0)
+            temp_stroke_feature.append(0)
+            temp_stroke_feature.append(0)
         # 26 - 27
         temp_stroke_feature.append(centroid[0])
         temp_stroke_feature.append(centroid[1])
         # over
+        assert len(temp_stroke_feature) == 27
         strokes_feature.append(temp_stroke_feature)
         all_stroke_bbox.append(bbox)
 
@@ -462,6 +356,7 @@ def graph_build(traces, group_data):
                 temp_edge_feature = getStrokePairEdgeFeature(i, i + 1, all_traces, distance_matrix, all_stroke_bbox,
                                                              all_stroke_centroids,
                                                              all_stroke_length, all_stroke_curvature)
+                assert len(temp_edge_feature) == 21
                 edge_feature_matrix[i][i + 1] = temp_edge_feature
 
         # spatial edge
@@ -472,13 +367,14 @@ def graph_build(traces, group_data):
                                                              all_stroke_bbox,
                                                              all_stroke_centroids,
                                                              all_stroke_length, all_stroke_curvature)
-
+                assert len(temp_edge_feature) == 21
                 edge_feature_matrix[i][target_idx] = temp_edge_feature
 
     # strokes_feature N*26
     stroke2label = sorted(stroke2label.items(), key=lambda i: i[0])
+
     return nodeFeatureStandardization(strokes_feature), stroke2label, edgeFeatureStandardization(
-        edge_feature_matrix), group_matrix
+        edge_feature_matrix), group_matrix, remove_id_map
 
 
 def getStrokePairEdgeFeature(stroke1_index, stroke2_index, all_traces, distance_matrix, all_stroke_bbox,
@@ -496,8 +392,10 @@ def getStrokePairEdgeFeature(stroke1_index, stroke2_index, all_traces, distance_
     # 4
     center1 = [(all_stroke_bbox[stroke1_index][0][0] + all_stroke_bbox[stroke1_index][2][0]) / 2,
                (all_stroke_bbox[stroke1_index][0][1] + all_stroke_bbox[stroke1_index][2][1]) / 2]
+
     center2 = [(all_stroke_bbox[stroke2_index][0][0] + all_stroke_bbox[stroke2_index][2][0]) / 2,
                (all_stroke_bbox[stroke2_index][0][1] + all_stroke_bbox[stroke2_index][2][1]) / 2]
+
     distance_center1_center2 = ((center1[0] - center2[0]) ** 2 + (center1[1] - center2[1]) ** 2) ** 0.5
     temp_edge_feature.append(distance_center1_center2)
     # 5
@@ -523,8 +421,8 @@ def getStrokePairEdgeFeature(stroke1_index, stroke2_index, all_traces, distance_
         abs(all_traces[min_index][-1][1] - all_traces[max_index][0][1]) / abs(stroke1_index - stroke2_index))
 
     # 12
-    print("all_stroke_bbox[min_index]", all_stroke_bbox[min_index])
-    print("all_stroke_bbox[max_index]", all_stroke_bbox[max_index])
+    # print("all_stroke_bbox[min_index]", all_stroke_bbox[min_index])
+    # print("all_stroke_bbox[max_index]", all_stroke_bbox[max_index])
     ioulike_result, min_area, max_area = ioulike(all_stroke_bbox[min_index], all_stroke_bbox[max_index])
     temp_edge_feature.append(ioulike_result)
     # 13 - 14
@@ -534,16 +432,35 @@ def getStrokePairEdgeFeature(stroke1_index, stroke2_index, all_traces, distance_
     max_width = all_stroke_bbox[max_index][2][0] - all_stroke_bbox[max_index][0][0]
     max_height = all_stroke_bbox[max_index][2][1] - all_stroke_bbox[max_index][0][1]
     assert max_width >= 0 and max_height >= 0
-    temp_edge_feature.append(min_width / max_width)
-    temp_edge_feature.append(min_height / max_height)
+    if max_width != 0:
+        temp_edge_feature.append(min_width / max_width)
+    else:
+        temp_edge_feature.append(0)
+    if max_height != 0:
+        temp_edge_feature.append(min_height / max_height)
+    else:
+        temp_edge_feature.append(0)
+
     # 15
-    temp_edge_feature.append(
-        getEuclideanDistance(all_stroke_bbox[min_index][0], all_stroke_bbox[min_index][2]) / getEuclideanDistance(
-            all_stroke_bbox[max_index][0], all_stroke_bbox[max_index][2]))
+    # print("all_stroke_bbox[min_index]", all_stroke_bbox[min_index])
+    # print("all_stroke_bbox[max_index]", all_stroke_bbox[max_index])
+    a = getEuclideanDistance(all_stroke_bbox[min_index][0], all_stroke_bbox[min_index][2])
+    b = getEuclideanDistance(all_stroke_bbox[max_index][0], all_stroke_bbox[max_index][2])
+    if b != 0:
+        temp_edge_feature.append(a / b)
+    else:
+        temp_edge_feature.append(0)
+
     # 16
-    temp_edge_feature.append(min_area / max_area)
+    if max_area != 0:
+        temp_edge_feature.append(min_area / max_area)
+    else:
+        temp_edge_feature.append(0)
     # 17
-    temp_edge_feature.append(all_stroke_length[min_index] / all_stroke_length[max_index])
+    if all_stroke_length[max_index] != 0:
+        temp_edge_feature.append(all_stroke_length[min_index] / all_stroke_length[max_index])
+    else:
+        temp_edge_feature.append(0)
     # 18
     temp_edge_feature.append(0)
     # 19
@@ -555,33 +472,64 @@ def getStrokePairEdgeFeature(stroke1_index, stroke2_index, all_traces, distance_
 
 
 def inkml2img(input_file, output_json_file, output_pic_file, output_node_feature_file, output_node_label_file,
-              output_edge_feature_file, output_edge_label_file, data_type, color='black', pt=False):
+              output_edge_feature_file, output_edge_label_file, output_id2originid_file, data_type, color='black',
+              pt=False):
     if data_type == "FC_A":
         traces, group_data = get_traces_data(input_file)
     elif data_type == "FC":
         traces, group_data = get_traces_data(input_file, "")
     else:
         traces = []
+        group_data = []
+    # print("traces", traces)
+    # print("group_data", group_data)
     json.dump(traces, open(output_json_file, "w"), indent=4)
-    strokes_feature, strokes_label, edge_feature_matrix, edge_label = graph_build(traces, group_data)
+    strokes_feature, strokes_label, edge_feature_matrix, edge_label, remove_id_map = graph_build(traces, group_data)
+    assert len(strokes_feature) == len(strokes_label) == len(edge_feature_matrix) == len(edge_label)
     json.dump(strokes_feature, open(output_node_feature_file, "w"), indent=4)
     json.dump(strokes_label, open(output_node_label_file, "w"), indent=4)
     json.dump(edge_feature_matrix, open(output_edge_feature_file, "w"), indent=4)
     json.dump(edge_label, open(output_edge_label_file, "w"), indent=4)
+    id2origin = {}
+    for k, v in remove_id_map.items():
+        id2origin[v] = k
+    json.dump(id2origin, open(output_id2originid_file, "w"), indent=4)
 
     if pt:
         plt.gca().invert_yaxis()
-        for elem in traces:
+        for elem in group_data:
             ls = elem['trace_group']
-            for subls in ls:
+            stroke_id = elem["trace_id"]
+            for i, subls in enumerate(ls):
                 data = np.array(subls)
                 if data_type == "FC_A":
                     x, y = zip(*data)
+                    print(x)
+                    print(y)
                 elif data_type == "FC":
                     x, y, p, t = zip(*data)
+                else:
+                    x = []
+                    y = []
+                if strokes_label[remove_id_map[stroke_id[i]]][1] == "connection":
+                    color = "#054E9F"
+                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "arrow":
+                    color = "#F2A90D"
+                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "data":
+                    color = "#F20D43"
+                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "text":
+                    color = "#F20DC4"
+                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "process":
+                    color = "#9F0DF2"
+                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "terminator":
+                    color = "#0D23F2"
+                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "decision":
+                    color = "#0DDFF2"
+                else:
+                    raise Exception('error node label type')
                 plt.plot(x, y, linewidth=2, c=color)
-        # plt.savefig(output_pic_file, bbox_inches='tight', dpi=100)
-        plt.savefig(output_pic_file, dpi=100)
+
+        plt.savefig(output_pic_file)
         plt.gcf().clear()
 
 
@@ -593,8 +541,9 @@ if __name__ == "__main__":
     node_label_json_path = sys.argv[5]
     edge_feature_json_path = sys.argv[6]
     edge_label_json_path = sys.argv[7]
+    id2originid_json_path = sys.argv[8]
 
-    data_type = sys.argv[8]
+    data_type = sys.argv[9]
     for parent, dirnames, filenames in os.walk(input_inkml, followlinks=True):
         for filename in filenames:
             if filename[-6:] == ".inkml":
@@ -606,8 +555,10 @@ if __name__ == "__main__":
                 output_node_label_file = os.path.join(node_label_json_path, filename[:-6]) + ".json"
                 output_edge_feature_file = os.path.join(edge_feature_json_path, filename[:-6]) + ".json"
                 output_edge_label_file = os.path.join(edge_label_json_path, filename[:-6]) + ".json"
+                output_id2originid_file = os.path.join(id2originid_json_path, filename[:-6] + ".json")
                 inkml2img(file_path, output_json_file, output_pic_file, output_node_feature_file,
-                          output_node_label_file, output_edge_feature_file, output_edge_label_file, data_type,
+                          output_node_label_file, output_edge_feature_file, output_edge_label_file,
+                          output_id2originid_file, data_type,
                           color='#284054', pt=True)
 
 # python dealInkml.py 'writer21_3.inkml','.writer21_3.png')

@@ -40,7 +40,6 @@ import pickle
 import zipfile
 import json
 
-
 import numpy as np
 import networkx as nx
 from networkx.readwrite import json_graph
@@ -48,7 +47,6 @@ import scipy.sparse as sp
 import torch
 from torch.hub import download_url_to_file
 from torch.utils.data import DataLoader, Dataset
-
 
 from utils.constants import *
 from utils.visualizations import plot_in_out_degree_distributions, visualize_graph
@@ -97,7 +95,8 @@ def load_graph_data(training_config, device):
         # Convert to dense PyTorch tensors
 
         # Needs to be long int type (in implementation 3) because later functions like PyTorch's index_select expect it
-        topology = torch.tensor(topology, dtype=torch.long if layer_type == LayerType.IMP3 else torch.float, device=device)
+        topology = torch.tensor(topology, dtype=torch.long if layer_type == LayerType.IMP3 else torch.float,
+                                device=device)
         node_labels = torch.tensor(node_labels_npy, dtype=torch.long, device=device)  # Cross entropy expects a long int
         node_features = torch.tensor(node_features_csr.todense(), device=device)
 
@@ -227,11 +226,114 @@ def load_graph_data(training_config, device):
         raise Exception(f'{dataset_name} not yet supported.')
 
 
+def sogou_load_node_feature(node_feature_path, device):
+    node_feature_list = []
+    file_name_list = []
+    # print(node_feature_path)
+    for parent, dirnames, filenames in os.walk(node_feature_path, followlinks=True):
+        for filename in filenames:
+            if filename[-5:] == ".json":
+                file_path = os.path.join(parent, filename)
+                temp_node_feature = json.load(open(file_path))
+                temp_node_feature = torch.tensor(temp_node_feature, device=device)
+                # print("temp_node_feature.shape", temp_node_feature.shape)
+                node_feature_list.append(temp_node_feature)
+                file_name_list.append(filename)
+    return file_name_list, node_feature_list
+
+
+def sogou_load_node_label(node_label_path, label_dict, device):
+    node_label_list = []
+    for parent, dirnames, filenames in os.walk(node_label_path, followlinks=True):
+        for filename in filenames:
+            if filename[-5:] == ".json":
+                file_path = os.path.join(parent, filename)
+                # N * 2
+                temp_node_label = json.load(open(file_path))
+                temp_list = []
+                for single_node_label in temp_node_label:
+                    # if single_node_label[1] in label_dict:
+                    #     temp_list.append(label_dict[single_node_label[1]])
+                    # else:
+                    #     label_dict[single_node_label[1]] = len(label_dict)
+                    temp_list.append(label_dict[single_node_label[1]])
+                temp_tensor = torch.tensor(temp_list, dtype=torch.long,
+                                           device=device)  # Cross entropy expects a long int
+                # print("temp_tensor.shape", temp_tensor.shape)
+                node_label_list.append(temp_tensor)
+    return node_label_list
+
+
+def edgeLabelTrans2Matrix(edge_label):
+    result = []
+    for x in edge_label:
+        temp_list = []
+        for y in x:
+            if y[0] == 1:
+                temp_list.append(1)
+            else:
+                temp_list.append(0)
+        result.append(temp_list)
+    result = np.array(result, dtype=np.float32)
+    # print("result.shape", result.shape)
+    result[result > 0] = 1  # multiple edges not allowed
+    result[result == 0] = -np.inf  # make it a mask instead of adjacency matrix (used to mask softmax)
+    result[result == 1] = 0
+    return result
+
+
+def sogou_load_edge_label(edge_feature_path, layer_type, device):
+    edge_feature_list = []
+    for parent, dirnames, filenames in os.walk(edge_feature_path, followlinks=True):
+        for filename in filenames:
+            if filename[-5:] == ".json":
+                file_path = os.path.join(parent, filename)
+                temp_edge_label = json.load(open(file_path))
+                temp_edge_label = edgeLabelTrans2Matrix(temp_edge_label)
+
+                # Convert to dense PyTorch tensors
+
+                # Needs to be long int type (in implementation 3) because later functions like PyTorch's index_select expect it
+                temp_edge_label = torch.tensor(temp_edge_label,
+                                               dtype=torch.long if layer_type == LayerType.IMP3 else torch.float,
+                                               device=device)
+                edge_feature_list.append(temp_edge_label)
+    return edge_feature_list
+
+
+def load_sogou_graph_data(config, type, device):
+    dataset_name = config['dataset_name'].lower()
+    layer_type = config['layer_type']
+    should_visualize = config['should_visualize']
+    print("Loading " + type + " ", DatasetType.SOGOU.name.lower())
+    if dataset_name == DatasetType.SOGOU.name.lower():  # Cora citation network
+        # shape = (B, N, FIN), where N is the number of nodes and FIN is the number of input features
+        file_name_list, node_features = sogou_load_node_feature(os.path.join(SOGOU_PATH, type + '/node_feature_json'),
+                                                                device)
+        node_label_dict = json.load(open("node_label_dict.json"))
+        # shape = (B, N, 1)
+        node_labels = sogou_load_node_label(os.path.join(SOGOU_PATH, type + '/node_label_json'), node_label_dict,
+                                            device)
+        # json.dump(node_label_dict, open("node_label_dict.json", "w"))
+        # shape = (B, N, N)
+        edge_label = sogou_load_edge_label(os.path.join(SOGOU_PATH, type + '/edge_label_json'), layer_type, device)
+        # Note: topology is just a fancy way of naming the graph structure data
+        # (be it in the edge index format or adjacency matrix)
+        if should_visualize:  # network analysis and graph drawing
+            plot_in_out_degree_distributions(topology, num_of_nodes, dataset_name)
+            visualize_graph(topology, node_labels_npy, dataset_name)
+        # print("node_labels", node_labels)
+        return file_name_list, node_features, node_labels, edge_label
+    else:
+        raise Exception(f'{dataset_name} not yet supported.')
+
+
 class GraphDataLoader(DataLoader):
     """
     When dealing with batches it's always a good idea to inherit from PyTorch's provided classes (Dataset/DataLoader).
 
     """
+
     def __init__(self, node_features_list, node_labels_list, edge_index_list, batch_size=1, shuffle=False):
         graph_dataset = GraphDataset(node_features_list, node_labels_list, edge_index_list)
         # We need to specify a custom collate function, it doesn't work with the default one
@@ -243,6 +345,7 @@ class GraphDataset(Dataset):
     This one just fetches a single graph from the split when GraphDataLoader "asks" it
 
     """
+
     def __init__(self, node_features_list, node_labels_list, edge_index_list):
         self.node_features_list = node_features_list
         self.node_labels_list = node_labels_list
@@ -308,9 +411,12 @@ def pickle_save(path, data):
     with open(path, 'wb') as file:
         pickle.dump(data, file, protocol=pickle.HIGHEST_PROTOCOL)
 
+
 '''
 每行向量按照自己的词语数量做平均
 '''
+
+
 def normalize_features_sparse(node_features_sparse):
     assert sp.issparse(node_features_sparse), f'Expected a sparse matrix, got {node_features_sparse}.'
 
@@ -372,5 +478,4 @@ def build_edge_index_nx(adjacency_list_dict):
     nx_graph = nx.from_dict_of_lists(adjacency_list_dict)
     adj = nx.adjacency_matrix(nx_graph)
     adj = adj.tocoo()  # convert to COO (COOrdinate sparse format)
-
     return np.row_stack((adj.row, adj.col))

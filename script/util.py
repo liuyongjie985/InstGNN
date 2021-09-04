@@ -23,7 +23,7 @@ def area(a, b, c):
     x1, y1 = a
     x2, y2 = b
     x3, y3 = c
-    return (x1 * y2 + x3 * y1 + x2 * y3 - x3 * y2 - x2 * y1 - x1 * y3) * 0.5
+    return (x1 * y2 - x3 * y2 + x3 * y1 - x2 * y1 + x2 * y3 - x1 * y3) * 0.5
 
 
 # 将所有的点绘制在坐标图上
@@ -195,10 +195,13 @@ def upStack(left_point, right_point, point_list, border_points, total_area, top_
     area_max = 0
     point_max = None
     for item in point_list:
+        # print("总点数", len(point_list))
         if item == left_point or item == right_point:
             continue
         else:
             new_area = area(left_point, right_point, item)
+            if new_area > 0 and new_area < 1e-6:
+                new_area = 0
             if new_area > area_max:
                 point_max = item
                 area_max = new_area
@@ -222,6 +225,8 @@ def downStack(left_point, right_point, point_list, border_points, total_area, bo
             continue
         else:
             new_area = area(left_point, right_point, item)
+            if new_area < 0 and new_area > -1e-6:
+                new_area = 0
             if new_area < area_min:
                 point_max = item
                 area_min = new_area
@@ -283,17 +288,18 @@ def getConvexHullArea(point_list):
         if bottom_p == None or bottom_p[1] > lr_bottom_p[1]:
             bottom_p = lr_bottom_p
 
-        print("left_p", left_p)
-        print("right_p", right_p)
-        print("top_p", top_p)
-        print("bottom_p", bottom_p)
+        # print("left_p", left_p)
+        # print("right_p", right_p)
+        # print("top_p", top_p)
+        # print("bottom_p", bottom_p)
 
         border_points.append(left_p)
         border_points.append(right_p)  # 将首尾两个点添加到边界点集中
         assert right_p[0] - left_p[0] >= 0
         # 流程图y轴坐标系与普通坐标系y轴相反，所以top_p是视觉上的底
         assert top_p[1] - bottom_p[1] >= 0
-        rectangularity = total_area[0] / ((right_p[0] - left_p[0]) * (top_p[1] - bottom_p[1]))
+        rectangularity = total_area[0] / ((right_p[0] - left_p[0]) * (top_p[1] - bottom_p[1])) if ((right_p[0] - left_p[
+            0]) * (top_p[1] - bottom_p[1])) != 0 else 0
         ratioOfThePrincipalAxis = (right_p[0] - left_p[0]) / (top_p[1] - bottom_p[1]) if (right_p[0] - left_p[0]) < (
                 top_p[1] - bottom_p[1]) else (top_p[1] - bottom_p[1]) / (right_p[0] - left_p[0])
 
@@ -315,11 +321,12 @@ def getConvexHullArea(point_list):
     else:
         # 该情况默认points_list只有一个点，无点就不要处理了
         border_points = point_list
-        return border_points, 0, 0, 0, None, None, 0, 0, None
+        return border_points, [0], 0, 0, None, None, 0, 0, [point_list[0], point_list[0], point_list[0], point_list[0]]
 
 
-def isSamePoint(point1, point2):
-    if point1[0] == point2[0] and point1[1] == point2[1]:
+def isSamePoint(point1, point2, th=1):
+    temp_distance = ((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2) ** 0.5
+    if temp_distance < th:
         return True
     else:
         return False
@@ -410,12 +417,23 @@ def getCircularVariance(point_list, intersection, major_vector, trajectory_lengt
     circular_variance = 0
     for x, y in point_list:
         circular_variance += (((x - centroid[0]) ** 2 + (y - centroid[1]) ** 2) ** 0.5 - mean_radius) ** 2
-    circular_variance = circular_variance / len(point_list) / (mean_radius ** 2)
+    # print("len(point_list)", len(point_list))
+    # print("mean_radius", mean_radius)
+    if mean_radius != 0:
+        circular_variance = circular_variance / len(point_list) / (mean_radius ** 2)
+    else:
+        circular_variance = 0
+    # print("centroid", centroid)
+    # print("intersection", intersection)
+    # print("major_vector", major_vector)
+    if intersection != None and major_vector != None:
+        centroid_offset = [(centroid[0] - intersection[0]) * major_vector[0],
+                           (centroid[1] - intersection[1]) * major_vector[1]]
+        centroid_offset = ((centroid_offset[0] ** 2 + centroid_offset[1] ** 2) ** 0.5) / (
+                (major_vector[0] ** 2 + major_vector[1] ** 2) ** 0.5)
+    else:
+        centroid_offset = 0
 
-    centroid_offset = [(centroid[0] - intersection[0]) * major_vector[0],
-                       (centroid[1] - intersection[1]) * major_vector[1]]
-    centroid_offset = ((centroid_offset[0] ** 2 + centroid_offset[1] ** 2) ** 0.5) / (
-            (major_vector[0] ** 2 + major_vector[1] ** 2) ** 0.5)
     ratio_between_first_to_last_point_distance_trajectory_length = ((point_list[-1][0] - point_list[0][0]) ** 2 + (
             point_list[-1][1] - point_list[0][1]) ** 2) ** 0.5 / trajectory_length if len(point_list) >= 2 else 0
 
@@ -434,7 +452,10 @@ def ioulike(bbox1, bbox2):
     intersection_area = intersection_h * intersection_w if intersection_w > 0 and intersection_h > 0 else 0
     denominator_w = max(bbox1[2][0], bbox2[2][0]) - min(bbox1[0][0], bbox2[0][0])
     denominator_h = max(bbox1[2][1], bbox2[2][1]) - min(bbox1[0][1], bbox2[0][1])
-    result = (h1 * w1 + h2 * w2 - intersection_area) / (denominator_w * denominator_h)
+    if (denominator_w * denominator_h) != 0:
+        result = (h1 * w1 + h2 * w2 - intersection_area) / (denominator_w * denominator_h)
+    else:
+        result = 0
     min_area = h1 * w1
     max_area = h2 * w2
     return result, min_area, max_area
@@ -443,7 +464,7 @@ def ioulike(bbox1, bbox2):
 def vectorNormalized(vc):
     new_v = []
     scalar = 0
-    print("vc", vc)
+    # print("vc", vc)
     for x in vc:
         if x >= 0:
             temp_sign = 1
@@ -476,8 +497,8 @@ def nodeFeatureStandardization(node_feature):
         sd_vc[i] = sd_vc[i] ** 0.5
 
     new_node_feature = []
-    print("avg_vc", avg_vc)
-    print("sd_vc", sd_vc)
+    # print("avg_vc", avg_vc)
+    # print("sd_vc", sd_vc)
 
     for fea_vc in node_feature:
         new_node_feature.append(vectorStandardization(fea_vc, avg_vc, sd_vc))
@@ -646,11 +667,11 @@ class MedianFinder(object):
 if __name__ == "__main__":
     # point_list = all_points()
     point_list = [[0, 2], [2, 0], [3, 1], [6, 2], [5, 3], [4, 4], [2, 5], [2, 4], [1, 3], [5, 1]]
-    print("all points", point_list)
+    # print("all points", point_list)
     border_points, total_area, rectangularity, ratioOfThePrincipalAxis, intersection, major_vector, width, height, bbox = getConvexHullArea(
         point_list)
-    print("border points", border_points)  # 输出边界点
-    print("area", total_area[0])  # 输出边界点
+    # print("border points", border_points)  # 输出边界点
+    # print("area", total_area[0])  # 输出边界点
     fig, ax = plt.subplots()
     plt.subplots_adjust(bottom=0.2)
     draw(point_list)
