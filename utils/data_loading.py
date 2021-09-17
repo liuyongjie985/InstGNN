@@ -264,27 +264,83 @@ def sogou_load_node_label(node_label_path, label_dict, device):
     return node_label_list
 
 
-def edgeLabelTrans2Matrix(edge_label):
-    result = []
-    for x in edge_label:
+'''
+N * N，里面每个 item 不是 None 就是 19维特征
+'''
+
+
+def edgeFeatureTrans2Matrix(edge_features):
+    feature_result = []
+    connection_result = []
+    for x in edge_features:
+        temp_list = []
+        temp_feature_list = []
+        for y in x:
+            if y == None:
+                temp_list.append(0)
+                temp_feature_list.append([0 for x in range(21)])
+            else:
+                temp_list.append(1)
+                temp_feature_list.append(y)
+        feature_result.append(temp_feature_list)
+        connection_result.append(temp_list)
+    feature_result = np.array(feature_result, dtype=np.float32)
+    connection_result = np.array(connection_result, dtype=np.float32)
+    connection_result[connection_result > 0] = 1  # multiple edges not allowed
+    connection_result[
+        connection_result == 0] = -np.inf  # make it a mask instead of adjacency matrix (used to mask softmax)
+    connection_result[connection_result == 1] = 0
+    return feature_result, connection_result
+
+
+'''
+N * N 每个item是个tuple，tuple的第一维为0/1代表是否为同一个symbol，tuple第二维为symbol
+'''
+
+
+def edgeLabelTrans2Matrix(edge_labels):
+    label_result = []
+    for x in edge_labels:
         temp_list = []
         for y in x:
             if y[0] == 1:
                 temp_list.append(1)
             else:
                 temp_list.append(0)
-        result.append(temp_list)
-    result = np.array(result, dtype=np.float32)
-    # print("result.shape", result.shape)
-    result[result > 0] = 1  # multiple edges not allowed
-    result[result == 0] = -np.inf  # make it a mask instead of adjacency matrix (used to mask softmax)
-    result[result == 1] = 0
-    return result
+        label_result.append(temp_list)
+    label_result = np.array(label_result, dtype=np.float32)
+    return label_result
 
 
-def sogou_load_edge_label(edge_feature_path, layer_type, device):
+def sogou_load_edge_features(edge_feature_path, device):
     edge_feature_list = []
+    connection_list = []
     for parent, dirnames, filenames in os.walk(edge_feature_path, followlinks=True):
+        for filename in filenames:
+            if filename[-5:] == ".json":
+                file_path = os.path.join(parent, filename)
+                temp_edge_features = json.load(open(file_path))
+                temp_edge_features, connections = edgeFeatureTrans2Matrix(temp_edge_features)
+
+                # Convert to dense PyTorch tensors
+                # Needs to be long int type (in implementation 3) because later functions like PyTorch's index_select expect it
+                temp_edge_features = torch.tensor(temp_edge_features,
+                                                  dtype=torch.float,
+                                                  device=device)
+
+                connections = torch.tensor(connections,
+                                           dtype=torch.float,
+                                           device=device)
+
+                edge_feature_list.append(temp_edge_features)
+                connection_list.append(connections)
+
+    return edge_feature_list, connection_list
+
+
+def sogou_load_edge_label(edge_label_path, device):
+    edge_label_list = []
+    for parent, dirnames, filenames in os.walk(edge_label_path, followlinks=True):
         for filename in filenames:
             if filename[-5:] == ".json":
                 file_path = os.path.join(parent, filename)
@@ -292,13 +348,12 @@ def sogou_load_edge_label(edge_feature_path, layer_type, device):
                 temp_edge_label = edgeLabelTrans2Matrix(temp_edge_label)
 
                 # Convert to dense PyTorch tensors
-
                 # Needs to be long int type (in implementation 3) because later functions like PyTorch's index_select expect it
                 temp_edge_label = torch.tensor(temp_edge_label,
-                                               dtype=torch.long if layer_type == LayerType.IMP3 else torch.float,
+                                               dtype=torch.long,
                                                device=device)
-                edge_feature_list.append(temp_edge_label)
-    return edge_feature_list
+                edge_label_list.append(temp_edge_label)
+    return edge_label_list
 
 
 def load_sogou_graph_data(config, type, device):
@@ -316,14 +371,16 @@ def load_sogou_graph_data(config, type, device):
                                             device)
         # json.dump(node_label_dict, open("node_label_dict.json", "w"))
         # shape = (B, N, N)
-        edge_label = sogou_load_edge_label(os.path.join(SOGOU_PATH, type + '/edge_label_json'), layer_type, device)
+        edge_features, edge_connection = sogou_load_edge_features(os.path.join(SOGOU_PATH, type + '/edge_feature_json'),
+                                                                  device)
+        edge_label = sogou_load_edge_label(os.path.join(SOGOU_PATH, type + '/edge_label_json'), device)
         # Note: topology is just a fancy way of naming the graph structure data
         # (be it in the edge index format or adjacency matrix)
         if should_visualize:  # network analysis and graph drawing
             plot_in_out_degree_distributions(topology, num_of_nodes, dataset_name)
             visualize_graph(topology, node_labels_npy, dataset_name)
         # print("node_labels", node_labels)
-        return file_name_list, node_features, node_labels, edge_label
+        return file_name_list, node_features, node_labels, edge_features, edge_connection, edge_label
     else:
         raise Exception(f'{dataset_name} not yet supported.')
 

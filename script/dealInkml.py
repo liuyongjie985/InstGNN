@@ -6,7 +6,8 @@ import sys
 import os
 import traceback
 
-from util import getConvexHullArea, getCircularVariance, minimalEuclideanDistanceBetweenStroke, getStrokeLength, \
+from utils import getConvexHullArea, getCircularVariance, minimalEuclideanDistanceBetweenStroke, \
+    getStrokeLength, \
     pairStrokeDistance, getAllStrokeLength, getEuclideanDistance, ioulike, pairStrokeDistance, getAllStrokeLength, \
     getEuclideanDistance, ioulike, MedianFinder, getAllStrokePairDistance, edgeFeatureStandardization, \
     nodeFeatureStandardization, stroke_points_resample
@@ -154,7 +155,6 @@ def distanceQuickSort(distance_matrix, distance_matrix_index):
 
 def graph_build(traces, group_data):
     all_traces = []
-    all_traces_id = []
     remove_id_map = {}
     i = 0
     for stroke in traces:
@@ -360,9 +360,9 @@ def graph_build(traces, group_data):
                 edge_feature_matrix[i][i + 1] = temp_edge_feature
 
         # spatial edge
-        spatial_index = sorted_distance_matrix_index[i][1:6]
+        spatial_index = sorted_distance_matrix_index[i][0:6]
         for target_idx in spatial_index:
-            if target_idx != i and edge_feature_matrix[i][target_idx] == None:
+            if edge_feature_matrix[i][target_idx] == None:
                 temp_edge_feature = getStrokePairEdgeFeature(i, target_idx, all_traces, distance_matrix,
                                                              all_stroke_bbox,
                                                              all_stroke_centroids,
@@ -413,12 +413,17 @@ def getStrokePairEdgeFeature(stroke1_index, stroke2_index, all_traces, distance_
     # 9
     temp_edge_feature.append(abs(stroke1_index - stroke2_index))
     # 10
-    temp_edge_feature.append(off_stroke_distance / abs(stroke1_index - stroke2_index))
-    # 11 - 11.1
-    temp_edge_feature.append(
-        abs(all_traces[min_index][-1][0] - all_traces[max_index][0][0]) / abs(stroke1_index - stroke2_index))
-    temp_edge_feature.append(
-        abs(all_traces[min_index][-1][1] - all_traces[max_index][0][1]) / abs(stroke1_index - stroke2_index))
+    if stroke1_index - stroke2_index != 0:
+        temp_edge_feature.append(off_stroke_distance / abs(stroke1_index - stroke2_index))
+        # 11 - 11.1
+        temp_edge_feature.append(
+            abs(all_traces[min_index][-1][0] - all_traces[max_index][0][0]) / abs(stroke1_index - stroke2_index))
+        temp_edge_feature.append(
+            abs(all_traces[min_index][-1][1] - all_traces[max_index][0][1]) / abs(stroke1_index - stroke2_index))
+    else:
+        temp_edge_feature.append(0)
+        temp_edge_feature.append(0)
+        temp_edge_feature.append(0)
 
     # 12
     # print("all_stroke_bbox[min_index]", all_stroke_bbox[min_index])
@@ -442,8 +447,6 @@ def getStrokePairEdgeFeature(stroke1_index, stroke2_index, all_traces, distance_
         temp_edge_feature.append(0)
 
     # 15
-    # print("all_stroke_bbox[min_index]", all_stroke_bbox[min_index])
-    # print("all_stroke_bbox[max_index]", all_stroke_bbox[max_index])
     a = getEuclideanDistance(all_stroke_bbox[min_index][0], all_stroke_bbox[min_index][2])
     b = getEuclideanDistance(all_stroke_bbox[max_index][0], all_stroke_bbox[max_index][2])
     if b != 0:
@@ -558,7 +561,6 @@ if __name__ == "__main__":
                 output_id2originid_file = os.path.join(id2originid_json_path, filename[:-6] + ".json")
                 inkml2img(file_path, output_json_file, output_pic_file, output_node_feature_file,
                           output_node_label_file, output_edge_feature_file, output_edge_label_file,
-                          output_id2originid_file, data_type,
-                          color='#284054', pt=True)
+                          output_id2originid_file, data_type, color='#284054', pt=True)
 
 # python dealInkml.py 'writer21_3.inkml','.writer21_3.png')

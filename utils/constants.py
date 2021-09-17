@@ -69,8 +69,10 @@ CORA_VAL_RANGE = [140, 140 + 500]
 CORA_TEST_RANGE = [1708, 1708 + 1000]
 CORA_NUM_INPUT_FEATURES = 1433
 SOGOU_NUM_INPUT_FEATURES = 27
+SOGOU_NUM_INPUT_EDGE_FEATURES = 21
 # CORA_NUM_CLASSES = 7
 SOGOU_NUM_CLASSES = 7
+SOGOU_EDGE_NUM_CLASS = 2
 network_repository_cora_url = r'http://networkrepository.com/graphvis.php?d=./data/gsm50/labeled/cora.edges'
 
 # Used whenever we need to plot points from different class (like t-SNE in playground.py and CORA visualization)
