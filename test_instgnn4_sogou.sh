@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=1 python testing_instgnn3_sogou.py --dataset_name SOGOU  --reload_path /search/odin/yongjie/code/InstGNN/InstGNN_3/models/InstGNN3_SOGOU_ckpt_epoch_2646.pth --id2originid_json_path /home/liuyongjie/InstGNN/data/sogou/id2originid_json --trace_path /home/liuyongjie/InstGNN/data/FC_A_DATA/FC_A_JSON --node_pic_path node_result_vis --edge_pic_path edge_result_vis

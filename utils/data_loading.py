@@ -269,6 +269,49 @@ N * N，里面每个 item 不是 None 就是 19维特征
 '''
 
 
+def edgeTwoFeatureTrans2Matrix(edge_features, edge_label):
+    feature_result = []
+    connection_result = []
+
+    sparse_feature_result = []
+    sparse_feature_index_result = []
+    sparse_label_result = []
+
+    already_dict = np.zeros_like(edge_features)
+    for i, x in enumerate(edge_features):
+        temp_list = []
+        temp_feature_list = []
+        for j, y in enumerate(x):
+            if y == None:
+                temp_list.append(0)
+                temp_feature_list.append([0 for x in range(21)])
+            else:
+                # 时间边与空间边
+                temp_list.append(1)
+                temp_feature_list.append(y)
+                if already_dict[i][j] == 0:
+                    sparse_feature_result.append(y)
+                    sparse_feature_index_result.append([i, j])
+                    sparse_label_result.append(edge_label[i][j][0])
+                    already_dict[i][j] = 1
+                    already_dict[j][i] = 1
+
+        feature_result.append(temp_feature_list)
+        connection_result.append(temp_list)
+
+    feature_result = np.array(feature_result, dtype=np.float32)
+    connection_result = np.array(connection_result, dtype=np.float32)
+    sparse_feature_result = np.array(sparse_feature_result, dtype=np.float32)
+    sparse_feature_index_result = np.array(sparse_feature_index_result, dtype=np.int64)
+    sparse_label_result = np.array(sparse_label_result, dtype=np.int64)
+
+    connection_result[connection_result > 0] = 1  # multiple edges not allowed
+    connection_result[
+        connection_result == 0] = -np.inf  # make it a mask instead of adjacency matrix (used to mask softmax)
+    connection_result[connection_result == 1] = 0
+    return feature_result, connection_result, sparse_feature_result, sparse_feature_index_result, sparse_label_result
+
+
 def edgeFeatureTrans2Matrix(edge_features):
     feature_result = []
     connection_result = []
@@ -312,6 +355,18 @@ def edgeLabelTrans2Matrix(edge_labels):
     return label_result
 
 
+def sparseEdgeLabelTrans2Matrix(edge_labels):
+    label_result = []
+    for x in edge_labels:
+        temp_list = []
+        for y in x:
+            if y[0] == 1:
+                temp_list.append(1)
+        label_result.append(temp_list)
+    label_result = np.array(label_result, dtype=np.float32)
+    return label_result
+
+
 def sogou_load_edge_features(edge_feature_path, device):
     edge_feature_list = []
     connection_list = []
@@ -338,6 +393,46 @@ def sogou_load_edge_features(edge_feature_path, device):
     return edge_feature_list, connection_list
 
 
+def sogou_load_edge_features_and_labels(edge_feature_path, edge_label_path, device):
+    edge_feature_list = []
+    connection_list = []
+
+    sparse_edge_feature_list = []
+    sparse_edge_index_list = []
+    sparse_edge_label_list = []
+    for parent, dirnames, filenames in os.walk(edge_feature_path, followlinks=True):
+        for filename in filenames:
+            if filename[-5:] == ".json":
+                edge_feature_file_path = os.path.join(parent, filename)
+                temp_edge_features = json.load(open(edge_feature_file_path))
+                edge_label_file_path = os.path.join(edge_label_path, filename)
+
+                temp_edge_label = json.load(open(edge_label_file_path))
+                temp_edge_features, connection_result, sparse_feature_result, sparse_feature_index_result, sparse_label_result = edgeTwoFeatureTrans2Matrix(
+                    temp_edge_features, temp_edge_label)
+
+                temp_edge_features = torch.tensor(temp_edge_features,
+                                                  dtype=torch.float,
+                                                  device=device)
+
+                connections = torch.tensor(connection_result,
+                                           dtype=torch.float,
+                                           device=device)
+
+                sparse_feature_result = torch.tensor(sparse_feature_result, dtype=torch.float, device=device)
+                sparse_feature_index_result = torch.tensor(sparse_feature_index_result, dtype=torch.long, device=device)
+                sparse_label_result = torch.tensor(sparse_label_result, dtype=torch.long, device=device)
+
+                edge_feature_list.append(temp_edge_features)
+                connection_list.append(connections)
+
+                sparse_edge_feature_list.append(sparse_feature_result)
+                sparse_edge_index_list.append(sparse_feature_index_result)
+                sparse_edge_label_list.append(sparse_label_result)
+
+    return edge_feature_list, connection_list, sparse_edge_feature_list, sparse_edge_index_list, sparse_edge_label_list
+
+
 def sogou_load_edge_label(edge_label_path, device):
     edge_label_list = []
     for parent, dirnames, filenames in os.walk(edge_label_path, followlinks=True):
@@ -354,6 +449,29 @@ def sogou_load_edge_label(edge_label_path, device):
                                                device=device)
                 edge_label_list.append(temp_edge_label)
     return edge_label_list
+
+
+def load_sogou_sparse_graph_data(config, type, device):
+    dataset_name = config['dataset_name'].lower()
+    layer_type = config['layer_type']
+    should_visualize = config['should_visualize']
+    print("Loading " + type + " ", DatasetType.SOGOU.name.lower())
+    if dataset_name == DatasetType.SOGOU.name.lower():  # Cora citation network
+        # shape = (B, N, FIN), where N is the number of nodes and FIN is the number of input features
+        file_name_list, node_features = sogou_load_node_feature(os.path.join(SOGOU_PATH, type + '/node_feature_json'),
+                                                                device)
+        node_label_dict = json.load(open("node_label_dict.json"))
+        # shape = (B, N, 1)
+        node_labels = sogou_load_node_label(os.path.join(SOGOU_PATH, type + '/node_label_json'), node_label_dict,
+                                            device)
+        # shape = (B, N, N)
+        edge_features, edge_connections, sparse_edge_features, sparse_edge_indexs, sparse_edge_labels = sogou_load_edge_features_and_labels(
+            os.path.join(SOGOU_PATH, type + '/edge_feature_json'), os.path.join(SOGOU_PATH, type + '/edge_label_json'),
+            device)
+
+        return file_name_list, node_features, node_labels, edge_features, edge_connections, sparse_edge_features, sparse_edge_indexs, sparse_edge_labels
+    else:
+        raise Exception(f'{dataset_name} not yet supported.')
 
 
 def load_sogou_graph_data(config, type, device):
@@ -516,7 +634,6 @@ def build_edge_index(adjacency_list_dict, num_of_nodes, add_self_edges=True):
             if (src_node, trg_node) not in seen_edges:  # it'd be easy to explicitly remove self-edges (Cora has none..)
                 source_nodes_ids.append(src_node)
                 target_nodes_ids.append(trg_node)
-
                 seen_edges.add((src_node, trg_node))
 
     if add_self_edges:
