@@ -1,5 +1,6 @@
 from threading import Thread
 import matplotlib.pyplot as plt
+from matplotlib.widgets import Button
 import random
 import math
 

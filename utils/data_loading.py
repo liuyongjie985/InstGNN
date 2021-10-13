@@ -272,29 +272,23 @@ N * N，里面每个 item 不是 None 就是 19维特征
 def edgeTwoFeatureTrans2Matrix(edge_features, edge_label):
     feature_result = []
     connection_result = []
-
     sparse_feature_result = []
     sparse_feature_index_result = []
     sparse_label_result = []
-
-    already_dict = np.zeros_like(edge_features)
     for i, x in enumerate(edge_features):
         temp_list = []
         temp_feature_list = []
+
         for j, y in enumerate(x):
             if y == None:
                 temp_list.append(0)
                 temp_feature_list.append([0 for x in range(21)])
             else:
-                # 时间边与空间边
                 temp_list.append(1)
                 temp_feature_list.append(y)
-                if already_dict[i][j] == 0:
-                    sparse_feature_result.append(y)
-                    sparse_feature_index_result.append([i, j])
-                    sparse_label_result.append(edge_label[i][j][0])
-                    already_dict[i][j] = 1
-                    already_dict[j][i] = 1
+                sparse_feature_result.append(y)
+                sparse_feature_index_result.append([i, j])
+                sparse_label_result.append(edge_label[i][j][0])
 
         feature_result.append(temp_feature_list)
         connection_result.append(temp_list)

@@ -86,7 +86,7 @@ def train_gat_cora(config):
                     valid_sparse_edge_features, valid_sparse_edge_indexs, valid_sparse_edge_labels)
                 time_start = time.time()
                 _, _, loss, node_accuracy, edge_accuracy = main_loop(LoopPhase.VAL, valid_graph_data, epoch=epoch)
-                print("GAT validation: time elapsed=" + str(time.time() - time_start) + "[s]|epoch=" + str(
+                print("GAT validation: train_loss=" + str(loss)[:8] + " |epoch=" + str(
                     epoch + 1) + "|valid node acc=" + str(node_accuracy) + "|valid edge acc=" + str(
                     edge_accuracy))
                 accuracy = node_accuracy + edge_accuracy
@@ -155,20 +155,20 @@ def get_training_args():
     args = parser.parse_args()
 
     # Model architecture related
-    # instgnn mutual learning
+    # instgnn no mutual learning
 
     # instgnn_config = {
     #     "num_of_layers": 3,  # GNNs, contrary to CNNs, are often shallow (it ultimately depends on the graph properties)
     #     "num_heads_per_layer": [8, 8, 8],
     #     "num_features_per_layer": [SOGOU_NUM_INPUT_FEATURES, 32, 32, 32],
     #     "num_edge_features_per_layer": SOGOU_NUM_INPUT_EDGE_FEATURES,
-    #     "num_of_joint_learning_layers": 3,
+    #     "num_of_joint_learning_layers": 1,
     #     # jll_num_heads_per_layer node的层multi-head 长度为层数+1
-    #     "jll_num_heads_per_layer": [8, 8, 8, 1],
+    #     "jll_num_heads_per_layer": [8, 1],
     #     # jll_num_features_per_layer node的层node feature dim 长度为层数+1
-    #     "jll_num_features_per_layer": [32, 32, 32, SOGOU_NUM_CLASSES],
+    #     "jll_num_features_per_layer": [32, SOGOU_NUM_CLASSES],
     #     # jll_edge_num_features edge的层edge feature dim 长度为层数+1
-    #     "jll_edge_num_features": [SOGOU_NUM_INPUT_EDGE_FEATURES, 35, 35, SOGOU_EDGE_NUM_CLASS],
+    #     "jll_edge_num_features": [SOGOU_NUM_INPUT_EDGE_FEATURES, SOGOU_EDGE_NUM_CLASS],
     #     "add_skip_connection": False,  # hurts perf on Cora
     #     "bias": True,  # result is not so sensitive to bias
     #     "dropout": 0.1,  # result is sensitive to dropout
@@ -182,14 +182,14 @@ def get_training_args():
         "num_heads_per_layer": [8, 8, 8],
         "num_features_per_layer": [SOGOU_NUM_INPUT_FEATURES, 32, 32, 32],
         "num_edge_features_per_layer": SOGOU_NUM_INPUT_EDGE_FEATURES,
-        "num_of_joint_learning_layers": 1,
+        "num_of_joint_learning_layers": 3,
         # jll_num_heads_per_layer node的层multi-head 长度为层数+1
-        "jll_num_heads_per_layer": [8, 1],
+        "jll_num_heads_per_layer": [8, 8, 8, 1],
         # jll_num_features_per_layer node的层node feature dim 长度为层数+1
-        "jll_num_features_per_layer": [32, SOGOU_NUM_CLASSES],
+        "jll_num_features_per_layer": [32, 32, 32, SOGOU_NUM_CLASSES],
         # jll_edge_num_features edge的层edge feature dim 长度为层数+1
-        "jll_edge_num_features": [SOGOU_NUM_INPUT_EDGE_FEATURES, SOGOU_EDGE_NUM_CLASS],
-        "add_skip_connection": False,  # hurts perf on Cora
+        "jll_edge_num_features": [SOGOU_NUM_INPUT_EDGE_FEATURES, 35, 35, SOGOU_EDGE_NUM_CLASS],
+        "add_skip_connection": True,  # hurts perf on Cora
         "bias": True,  # result is not so sensitive to bias
         "dropout": 0.1,  # result is sensitive to dropout
         "layer_type": LayerType.IMP2  # fastest implementation enabled by default

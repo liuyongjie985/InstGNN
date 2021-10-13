@@ -1,0 +1,1 @@
+python dealInkml.py /home/liuyongjie/InstGNN/data/FC_DATA/FC_INKML /home/liuyongjie/InstGNN/data/FC_DATA/FC_JSON /home/liuyongjie/InstGNN/data/FC_DATA/FC_PIC/ /home/liuyongjie/InstGNN/data/sogou/node_feature_json/ /home/liuyongjie/InstGNN/data/sogou/node_label_json/ /home/liuyongjie/InstGNN/data/sogou/edge_feature_json/ /home/liuyongjie/InstGNN/data/sogou/edge_label_json/ FC

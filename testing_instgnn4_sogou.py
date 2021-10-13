@@ -50,6 +50,7 @@ def test_gat_cora(config):
     ).to(device)
 
     state_dict = torch.load(config["reload_path"])
+    # state_dict = torch.load(config["reload_path"], map_location=torch.device('cpu'))
     instgnn.load_state_dict(state_dict["state_dict"])
     print("reload from ", config["reload_path"])
     # Step 3: Prepare other training related utilities (loss & optimizer and decorator function)
@@ -143,7 +144,6 @@ def test_gat_cora(config):
                 # plt.savefig(os.path.join(config["edge_pic_path"], valid_file_name[i][:-5]) + ".jpg")
                 # plt.gcf().clear()
                 # =========== new edge classification =========
-
                 edge_matrix = np.zeros(shape=valid_edge_connections[i].shape)
                 assert len(edge_class_pd_list[i]) == len(valid_sparse_edge_indexs[i])
                 group_list = []
@@ -154,8 +154,6 @@ def test_gat_cora(config):
                     if i_sparse_edges == 1:
                         temp_x = valid_sparse_edge_indexs[i][j][0].item()
                         temp_y = valid_sparse_edge_indexs[i][j][1].item()
-                        print("x y", valid_sparse_edge_indexs[i][j])
-                        print("already_dict", already_dict)
 
                         if temp_x in already_dict and temp_y in already_dict:
                             if already_dict[temp_x] != already_dict[temp_y]:
@@ -173,25 +171,26 @@ def test_gat_cora(config):
                                 already_dict[temp_x] = len(group_list)
                                 already_dict[temp_y] = len(group_list)
                                 group_list.append([temp_x, temp_y])
-                        print("group_list", group_list)
-                        print(abc)
+
                         abc += 1
                         # if abc >= 10:
                         #     exit()
+
                 plt.gca().invert_yaxis()
                 pic_already_dict = {}
-                print("group_list", group_list)
-                print("already_dict", already_dict)
+
                 for temp_group in group_list:
-                    if already_dict[temp_group[0]] not in pic_already_dict:
-                        color = np.random.rand(3, )
-                        for stroke_id in temp_group:
+
+                    color = np.random.rand(3, )
+                    for stroke_id in temp_group:
+                        if stroke_id not in pic_already_dict:
                             x, y = zip(*all_trace[idx2originid[str(stroke_id)]]["coords"])
                             plt.plot(x, y, linewidth=2, c=color)
-                        pic_already_dict[already_dict[temp_group[0]]] = 1
+                    pic_already_dict[already_dict[temp_group[0]]] = 1
 
                 plt.savefig(os.path.join(config["edge_pic_path"], valid_file_name[i][:-5]) + ".jpg")
                 plt.gcf().clear()
+
         except Exception as e:  # "patience has run out" exception :O
             traceback.print_exc()
 
@@ -230,20 +229,36 @@ def get_training_args():
 
     # Model architecture related
     # INSTGNN
+    # instgnn_config = {
+    #     "num_of_layers": 3,  # GNNs, contrary to CNNs, are often shallow (it ultimately depends on the graph properties)
+    #     "num_of_joint_learning_layers": 1,
+    #     "num_heads_per_layer": [8, 8, 8],
+    #     "num_features_per_layer": [SOGOU_NUM_INPUT_FEATURES, 32, 32, 32],
+    #     "jll_num_heads_per_layer": [8, 1],
+    #     "jll_num_features_per_layer": [32, SOGOU_NUM_CLASSES],
+    #     "num_edge_features_per_layer": SOGOU_NUM_INPUT_EDGE_FEATURES,
+    #     "jll_edge_num_features": [SOGOU_NUM_INPUT_EDGE_FEATURES, SOGOU_EDGE_NUM_CLASS],
+    #     "add_skip_connection": False,  # hurts perf on Cora
+    #     "bias": True,  # result is not so sensitive to bias
+    #     "dropout": 0.1,  # result is sensitive to dropout
+    #     "layer_type": LayerType.IMP2  # fastest implementation enabled by default
+    # }
+
     instgnn_config = {
         "num_of_layers": 3,  # GNNs, contrary to CNNs, are often shallow (it ultimately depends on the graph properties)
-        "num_of_joint_learning_layers": 1,
+        "num_of_joint_learning_layers": 3,
         "num_heads_per_layer": [8, 8, 8],
         "num_features_per_layer": [SOGOU_NUM_INPUT_FEATURES, 32, 32, 32],
-        "jll_num_heads_per_layer": [8, 1],
-        "jll_num_features_per_layer": [32, SOGOU_NUM_CLASSES],
+        "jll_num_heads_per_layer": [8, 8, 8, 1],
+        "jll_num_features_per_layer": [32, 32, 32, SOGOU_NUM_CLASSES],
         "num_edge_features_per_layer": SOGOU_NUM_INPUT_EDGE_FEATURES,
-        "jll_edge_num_features": [SOGOU_NUM_INPUT_EDGE_FEATURES, SOGOU_EDGE_NUM_CLASS],
-        "add_skip_connection": False,  # hurts perf on Cora
+        "jll_edge_num_features": [SOGOU_NUM_INPUT_EDGE_FEATURES, 35, 35, SOGOU_EDGE_NUM_CLASS],
+        "add_skip_connection": True,  # hurts perf on Cora
         "bias": True,  # result is not so sensitive to bias
         "dropout": 0.1,  # result is sensitive to dropout
         "layer_type": LayerType.IMP2  # fastest implementation enabled by default
     }
+
     # Wrapping training configuration into a dictionary
     training_config = dict()
     for arg in vars(args):

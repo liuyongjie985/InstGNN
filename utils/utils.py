@@ -45,7 +45,7 @@ def name_to_layer_type(name):
 
 def get_training_state(training_config, model):
     training_state = {
-        "commit_hash": git.Repo(search_parent_directories=True).head.object.hexsha,
+        "commit_hash": "",
 
         # Training details
         "dataset_name": training_config['dataset_name'],
@@ -119,6 +119,8 @@ def get_instgnn4_main_loop(config, instgnn, cross_entropy_loss, mse_loss, optimi
                 (single_graph_data[0], single_graph_data[2], single_graph_data[3], single_graph_data[4],
                  single_graph_data[5]))
 
+
+
             # N*1
             gt_node_labels = single_graph_data[1]  # gt stands for ground truth
             gt_edge_labels = single_graph_data[6]
@@ -136,6 +138,7 @@ def get_instgnn4_main_loop(config, instgnn, cross_entropy_loss, mse_loss, optimi
             edge_class_predictions = torch.argmax(out_edges_features, dim=-1)
             edge_class_pd_list.append(edge_class_predictions)
 
+
             weight1 = gt_edge_labels.clone()
             weight1 = torch.sum(weight1)
 
@@ -144,7 +147,8 @@ def get_instgnn4_main_loop(config, instgnn, cross_entropy_loss, mse_loss, optimi
             weight0 = 1 / (weight0) if weight0 != 0 else 0
             weight1 = 1 / (weight1) if weight1 != 0 else 0
 
-            cross_entropy_loss.weight = torch.tensor(np.array([weight0, weight1]), device=device, dtype=torch.float32)
+            cross_entropy_loss.weight = torch.tensor(np.array([weight0.cpu(), weight1.cpu()]), device=device, dtype=torch.float32)
+
             # print("out_edges_features.shape", out_edges_features.shape)
             # print("gt_edge_labels", gt_edge_labels)
             loss_ec = cross_entropy_loss(out_edges_features, gt_edge_labels)

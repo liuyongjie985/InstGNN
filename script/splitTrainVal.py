@@ -32,3 +32,11 @@ for f in all_file_list:
             "cp " + total_list[0] + "/node_feature_json/" + f + ".json" + " " + train_list[0] + "/node_feature_json/")
         os.system("cp " + total_list[0] + "/node_label_json/" + f + ".json" + " " + train_list[0] + "/node_label_json/")
     i += 1
+
+if __name__ == "__main__":
+    output_json_path = sys.argv[2]
+    output_pic_path = sys.argv[3]
+    node_feature_json_path = sys.argv[4]
+    node_label_json_path = sys.argv[5]
+    edge_feature_json_path = sys.argv[6]
+    edge_label_json_path = sys.argv[7]

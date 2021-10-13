@@ -62,7 +62,7 @@ os.makedirs(CHECKPOINTS_PATH, exist_ok=True)
 #
 
 CORA_PATH = os.path.join(DATA_DIR_PATH, 'cora')  # this is checked-in no need to make a directory
-SOGOU_PATH = os.path.join(DATA_DIR_PATH, 'sogou_origin')
+SOGOU_PATH = os.path.join(DATA_DIR_PATH, 'sogou')
 # Thomas Kipf et al. first used this split in GCN paper and later Petar Veličković et al. in GAT paper
 CORA_TRAIN_RANGE = [0, 140]
 CORA_VAL_RANGE = [140, 140 + 500]
