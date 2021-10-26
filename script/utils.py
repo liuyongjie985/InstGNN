@@ -3,6 +3,26 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
 import random
 import math
+from shapely.geometry import Point, Polygon
+
+
+def isStrokeInGroup(s, gxs, gys):
+    coords = [(gxs[i], gys[i]) for i in range(len(gxs))]
+    poly = Polygon(coords)
+    in_num = 0
+    total_num = 0
+
+    for point in s:
+        p = Point(point["x"], point["y"])
+        if p.within(poly):
+            in_num += 1
+        total_num += 1
+
+    if total_num != 0 and in_num / total_num > 0.8:
+        return True
+    else:
+        return False
+
 
 # 生成所有的点
 all = []
@@ -665,13 +685,9 @@ class MedianFinder(object):
 
 
 if __name__ == "__main__":
-    # point_list = all_points()
     point_list = [[0, 2], [2, 0], [3, 1], [6, 2], [5, 3], [4, 4], [2, 5], [2, 4], [1, 3], [5, 1]]
-    # print("all points", point_list)
     border_points, total_area, rectangularity, ratioOfThePrincipalAxis, intersection, major_vector, width, height, bbox = getConvexHullArea(
         point_list)
-    # print("border points", border_points)  # 输出边界点
-    # print("area", total_area[0])  # 输出边界点
     fig, ax = plt.subplots()
     plt.subplots_adjust(bottom=0.2)
     draw(point_list)

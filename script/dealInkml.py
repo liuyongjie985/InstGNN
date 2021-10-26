@@ -10,10 +10,116 @@ from utils import getConvexHullArea, getCircularVariance, minimalEuclideanDistan
     getStrokeLength, \
     pairStrokeDistance, getAllStrokeLength, getEuclideanDistance, ioulike, pairStrokeDistance, getAllStrokeLength, \
     getEuclideanDistance, ioulike, MedianFinder, getAllStrokePairDistance, edgeFeatureStandardization, \
-    nodeFeatureStandardization, stroke_points_resample
+    nodeFeatureStandardization, stroke_points_resample, isStrokeInGroup
+
+"trace_data: list of [{'label': label, 'trace_group': traces_curr, 'trace_id': traces_id}]"
 
 
-# def get_traces_data(inkml_file_abs_path, xmlns='{http://www.w3.org/2003/InkML}'):
+def label_align(temp_label):
+    if temp_label == "circle":
+        return "terminator"
+    if temp_label == "rounded":
+        return "terminator"
+    return temp_label
+
+
+def get_TX_traces_data(json_file_abs_path, doc_namespace="{http://www.w3.org/2003/InkML}"):
+    traces_data = []
+    trace_json = json.load(open(json_file_abs_path))
+    traces_all = []
+    for i, stroke in enumerate(trace_json):
+        temp_list = []
+        for point in stroke:
+            temp_list.append([point["x"], point["y"]])
+        traces_all.append({"coords": temp_list, "id": i})
+
+    label_json = json.load(open(json_file_abs_path[:-5] + ".label"))
+    already_dict = {}
+    noise_list = {}
+
+    for shape in label_json["shapes"]:
+        temp_label = shape["label"]
+        temp_x, temp_y = zip(*shape["points"])
+        temp_group = {}
+
+        for i, stroke in enumerate(trace_json):
+            if isStrokeInGroup(stroke, temp_x, temp_y):
+                if temp_label != "noise":
+                    if i not in already_dict:
+                        already_dict[i] = len(traces_data)
+                        temp_group[i] = 1
+                    else:
+                        temp_group[i] = 1
+                        traces_data[already_dict[i]]["trace_group_dict"].pop(i)
+                        traces_data[already_dict[i]]["trace_id_dict"].pop(i)
+                        already_dict[i] = len(traces_data)
+                else:
+                    # traces_all.pop(i)
+                    noise_list[i] = 1
+                    pass
+
+        temp_result = {"group": sorted(temp_group.items(), key=lambda pk: pk[0])}
+        temp_trace_dict = {}
+        temp_id_dict = {}
+        for strokeid in temp_result["group"]:
+            temp_trace_dict[strokeid[0]] = traces_all[strokeid[0]]["coords"]
+            temp_id_dict[strokeid[0]] = strokeid[0]
+
+        temp_result["trace_id_dict"] = temp_id_dict
+        temp_result["trace_group_dict"] = temp_trace_dict
+        temp_result["label"] = label_align(temp_label)
+        if temp_result["label"] != "noise":
+            traces_data.append(temp_result)
+
+    for temp_result in traces_data:
+        temp_result["trace_id"] = [k for k, v in temp_result["trace_id_dict"].items()]
+        temp_result["trace_group"] = [v for k, v in temp_result["trace_group_dict"].items()]
+        temp_result.pop("trace_id_dict")
+        temp_result.pop("trace_group_dict")
+        temp_result.pop("group")
+
+    new_traces_all = []
+
+    # ==============================确认group_id中没有noise id 以及 未被框选到的stroke id===============================
+    for i, stroke in enumerate(traces_all):
+        if i not in noise_list and i in already_dict:
+            pass
+        else:
+            for temp_result in traces_data:
+                for j, stroke_id in enumerate(temp_result["trace_id"]):
+                    assert i != stroke_id
+    # ========================================================================================================================
+    offset = 0
+    indeed_i = 0
+    for i, stroke in enumerate(traces_all):
+        if i not in noise_list and i in already_dict:
+            stroke["id"] = indeed_i
+            new_traces_all.append(stroke)
+            indeed_i += 1
+        else:
+            for temp_result in traces_data:
+                for j, stroke_id in enumerate(temp_result["trace_id"]):
+                    if stroke_id >= i - offset:
+                        temp_result["trace_id"][j] -= 1
+            offset += 1
+    traces_all = new_traces_all
+
+    plt.gca().invert_yaxis()
+    pic_already_dict = {}
+
+    for group_index, temp_group in enumerate(traces_data):
+        color = np.random.rand(3, )
+        for stroke_id in temp_group["trace_id"]:
+            assert stroke_id not in pic_already_dict
+            x, y = zip(*traces_all[stroke_id])
+            plt.plot(x, y, linewidth=2, c=color)
+            pic_already_dict[stroke_id] = 1
+
+    plt.savefig("see.jpg")
+    plt.gcf().clear()
+    return traces_all, traces_data
+
+
 def get_traces_data(inkml_file_abs_path, doc_namespace="{http://www.w3.org/2003/InkML}"):
     traces_data = []
 
@@ -43,7 +149,6 @@ def get_traces_data(inkml_file_abs_path, doc_namespace="{http://www.w3.org/2003/
 
     'Sort traces_all list by id to make searching for references faster'
     traces_all.sort(key=lambda trace_dict: int(trace_dict['id']))
-    # print("traces_all", traces_all)
     'Always 1st traceGroup is a redundant wrapper'
     traceGroupWrapper = root.find(doc_namespace + 'traceGroup')
 
@@ -183,8 +288,6 @@ def graph_build(traces, group_data):
                 group_matrix[temp_list[y]][temp_list[x]][0] = 1
                 group_matrix[temp_list[y]][temp_list[x]][1] = temp_label
 
-    # json.dump(group_matrix, open("group_matrix", "w"), indent=4)
-    # exit()
     distance_matrix, distance_matrix_index = pairStrokeDistance(all_traces)
     # print("distance_matrix", distance_matrix)
     # json.dump(distance_matrix, open("distance_matrix.json", "w"), indent=4)
@@ -199,8 +302,6 @@ def graph_build(traces, group_data):
 
     # print(all_traces)
     sorted_distance_matrix, sorted_distance_matrix_index = distanceQuickSort(distance_matrix, distance_matrix_index)
-    # print("sorted_distance_matrix", sorted_distance_matrix)
-    # print("sorted_distance_matrix_index", sorted_distance_matrix_index)
 
     all_stroke_length = getAllStrokeLength(all_traces)
     stroke_pair_minimal_euclidean_distance = getAllStrokePairDistance(all_traces)
@@ -447,6 +548,8 @@ def getStrokePairEdgeFeature(stroke1_index, stroke2_index, all_traces, distance_
         temp_edge_feature.append(0)
 
     # 15
+    # print("all_stroke_bbox[min_index]", all_stroke_bbox[min_index])
+    # print("all_stroke_bbox[max_index]", all_stroke_bbox[max_index])
     a = getEuclideanDistance(all_stroke_bbox[min_index][0], all_stroke_bbox[min_index][2])
     b = getEuclideanDistance(all_stroke_bbox[max_index][0], all_stroke_bbox[max_index][2])
     if b != 0:
@@ -481,13 +584,18 @@ def inkml2img(input_file, output_json_file, output_pic_file, output_node_feature
         traces, group_data = get_traces_data(input_file)
     elif data_type == "FC":
         traces, group_data = get_traces_data(input_file, "")
+    elif data_type == "TS":
+        traces, group_data = get_TX_traces_data(input_file)
     else:
         traces = []
         group_data = []
-    # print("traces", traces)
-    # print("group_data", group_data)
+
     json.dump(traces, open(output_json_file, "w"), indent=4)
     strokes_feature, strokes_label, edge_feature_matrix, edge_label, remove_id_map = graph_build(traces, group_data)
+    print("len(strokes_feature)", len(strokes_feature))
+    print("len(strokes_label)", len(strokes_label))
+    print("len(edge_feature_matrix)", len(edge_feature_matrix))
+    print("len(edge_label)", len(edge_label))
     assert len(strokes_feature) == len(strokes_label) == len(edge_feature_matrix) == len(edge_label)
     json.dump(strokes_feature, open(output_node_feature_file, "w"), indent=4)
     json.dump(strokes_label, open(output_node_label_file, "w"), indent=4)
@@ -514,19 +622,21 @@ def inkml2img(input_file, output_json_file, output_pic_file, output_node_feature
                 else:
                     x = []
                     y = []
-                if strokes_label[remove_id_map[stroke_id[i]]][1] == "connection":
+                temp_strokes_label = strokes_label[remove_id_map[stroke_id[i]]][1]
+                print("temp_strokes_label", temp_strokes_label)
+                if temp_strokes_label == "connection":
                     color = "#054E9F"
-                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "arrow":
+                elif temp_strokes_label == "arrow":
                     color = "#F2A90D"
-                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "data":
+                elif temp_strokes_label == "data":
                     color = "#F20D43"
-                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "text":
+                elif temp_strokes_label == "text":
                     color = "#F20DC4"
-                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "process":
+                elif temp_strokes_label == "process":
                     color = "#9F0DF2"
-                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "terminator":
+                elif temp_strokes_label == "terminator":
                     color = "#0D23F2"
-                elif strokes_label[remove_id_map[stroke_id[i]]][1] == "decision":
+                elif temp_strokes_label == "decision":
                     color = "#0DDFF2"
                 else:
                     raise Exception('error node label type')
@@ -545,11 +655,12 @@ if __name__ == "__main__":
     edge_feature_json_path = sys.argv[6]
     edge_label_json_path = sys.argv[7]
     id2originid_json_path = sys.argv[8]
-
     data_type = sys.argv[9]
+
     for parent, dirnames, filenames in os.walk(input_inkml, followlinks=True):
         for filename in filenames:
-            if filename[-6:] == ".inkml":
+            if (filename[-6:] == ".inkml" and (data_type == "FC" or data_type == "FC_A")) or (
+                    filename[-5:] == ".json" and data_type == "TS"):
                 file_path = os.path.join(parent, filename)
                 print("file_path", file_path)
                 output_json_file = os.path.join(output_json_path, filename[:-6]) + ".json"
@@ -561,6 +672,5 @@ if __name__ == "__main__":
                 output_id2originid_file = os.path.join(id2originid_json_path, filename[:-6] + ".json")
                 inkml2img(file_path, output_json_file, output_pic_file, output_node_feature_file,
                           output_node_label_file, output_edge_feature_file, output_edge_label_file,
-                          output_id2originid_file, data_type, color='#284054', pt=True)
-
-# python dealInkml.py 'writer21_3.inkml','.writer21_3.png')
+                          output_id2originid_file, data_type,
+                          color='#284054', pt=True)

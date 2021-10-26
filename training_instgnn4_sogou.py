@@ -155,27 +155,6 @@ def get_training_args():
     args = parser.parse_args()
 
     # Model architecture related
-    # instgnn no mutual learning
-
-    # instgnn_config = {
-    #     "num_of_layers": 3,  # GNNs, contrary to CNNs, are often shallow (it ultimately depends on the graph properties)
-    #     "num_heads_per_layer": [8, 8, 8],
-    #     "num_features_per_layer": [SOGOU_NUM_INPUT_FEATURES, 32, 32, 32],
-    #     "num_edge_features_per_layer": SOGOU_NUM_INPUT_EDGE_FEATURES,
-    #     "num_of_joint_learning_layers": 1,
-    #     # jll_num_heads_per_layer node的层multi-head 长度为层数+1
-    #     "jll_num_heads_per_layer": [8, 1],
-    #     # jll_num_features_per_layer node的层node feature dim 长度为层数+1
-    #     "jll_num_features_per_layer": [32, SOGOU_NUM_CLASSES],
-    #     # jll_edge_num_features edge的层edge feature dim 长度为层数+1
-    #     "jll_edge_num_features": [SOGOU_NUM_INPUT_EDGE_FEATURES, SOGOU_EDGE_NUM_CLASS],
-    #     "add_skip_connection": False,  # hurts perf on Cora
-    #     "bias": True,  # result is not so sensitive to bias
-    #     "dropout": 0.1,  # result is sensitive to dropout
-    #     "layer_type": LayerType.IMP2  # fastest implementation enabled by default
-    # }
-
-    # instgnn no mutual learning
 
     instgnn_config = {
         "num_of_layers": 3,  # GNNs, contrary to CNNs, are often shallow (it ultimately depends on the graph properties)

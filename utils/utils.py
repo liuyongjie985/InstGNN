@@ -1,10 +1,26 @@
 import re
-import os
-
-import git
 import numpy as np
 import torch
 from utils.constants import *
+from shapely.geometry import Point, Polygon
+
+
+def isStrokeInGroup(s, gxs, gys):
+    coords = [(gxs[i], gys[i]) for i in range(len(gxs))]
+    poly = Polygon(coords)
+    in_num = 0
+    total_num = 0
+
+    for point in s:
+        p = Point(point["x"], point["y"])
+        if p.within(poly):
+            in_num += 1
+        total_num += 1
+
+    if total_num != 0 and in_num / total_num > 0.8:
+        return True
+    else:
+        return False
 
 
 def convert_adj_to_edge_index(adjacency_matrix):
@@ -46,7 +62,6 @@ def name_to_layer_type(name):
 def get_training_state(training_config, model):
     training_state = {
         "commit_hash": "",
-
         # Training details
         "dataset_name": training_config['dataset_name'],
         "num_of_epochs": training_config['num_of_epochs'],
@@ -119,8 +134,6 @@ def get_instgnn4_main_loop(config, instgnn, cross_entropy_loss, mse_loss, optimi
                 (single_graph_data[0], single_graph_data[2], single_graph_data[3], single_graph_data[4],
                  single_graph_data[5]))
 
-
-
             # N*1
             gt_node_labels = single_graph_data[1]  # gt stands for ground truth
             gt_edge_labels = single_graph_data[6]
@@ -138,19 +151,16 @@ def get_instgnn4_main_loop(config, instgnn, cross_entropy_loss, mse_loss, optimi
             edge_class_predictions = torch.argmax(out_edges_features, dim=-1)
             edge_class_pd_list.append(edge_class_predictions)
 
-
             weight1 = gt_edge_labels.clone()
             weight1 = torch.sum(weight1)
-
+            # print("gt_edge_labels", gt_edge_labels)
             weight0 = len(gt_edge_labels.clone()) - weight1
 
-            weight0 = 1 / (weight0) if weight0 != 0 else 0
-            weight1 = 1 / (weight1) if weight1 != 0 else 0
+            weight0 = 1 / (weight0) if weight0 != 0 else torch.tensor(0, device=device)
+            weight1 = 1 / (weight1) if weight1 != 0 else torch.tensor(0, device=device)
 
-            cross_entropy_loss.weight = torch.tensor(np.array([weight0.cpu(), weight1.cpu()]), device=device, dtype=torch.float32)
-
-            # print("out_edges_features.shape", out_edges_features.shape)
-            # print("gt_edge_labels", gt_edge_labels)
+            cross_entropy_loss.weight = torch.tensor(np.array([weight0.cpu(), weight1.cpu()]), device=device,
+                                                     dtype=torch.float32)
             loss_ec = cross_entropy_loss(out_edges_features, gt_edge_labels)
 
             loss = loss_ec + loss_nc

@@ -2,9 +2,10 @@ import sys
 import os
 import random
 
-total_list = ["/home/liuyongjie/InstGNN/data/sogou"]
-train_list = ["/home/liuyongjie/InstGNN/data/sogou/train"]
-valid_list = ["/home/liuyongjie/InstGNN/data/sogou/valid"]
+base_path = "/home/liuyongjie/InstGNN/data/sogou_tencent"
+total_list = [base_path]
+train_list = [base_path + "/train"]
+valid_list = [base_path + "/valid"]
 all_file_list = []
 for x in total_list:
     for parent, dirnames, filenames in os.walk(x + "/edge_feature_json", followlinks=True):
@@ -13,11 +14,11 @@ for x in total_list:
                 file_prefix = filename[:-5]
                 all_file_list.append(file_prefix)
 
-TEST_NUM = 100
+TEST_NUM = 30
 random.shuffle(all_file_list)
 i = 0
 for f in all_file_list:
-    if i < 100:
+    if i < TEST_NUM:
         os.system(
             "cp " + total_list[0] + "/edge_feature_json/" + f + ".json" + " " + valid_list[0] + "/edge_feature_json/")
         os.system("cp " + total_list[0] + "/edge_label_json/" + f + ".json" + " " + valid_list[0] + "/edge_label_json/")
@@ -32,11 +33,3 @@ for f in all_file_list:
             "cp " + total_list[0] + "/node_feature_json/" + f + ".json" + " " + train_list[0] + "/node_feature_json/")
         os.system("cp " + total_list[0] + "/node_label_json/" + f + ".json" + " " + train_list[0] + "/node_label_json/")
     i += 1
-
-if __name__ == "__main__":
-    output_json_path = sys.argv[2]
-    output_pic_path = sys.argv[3]
-    node_feature_json_path = sys.argv[4]
-    node_label_json_path = sys.argv[5]
-    edge_feature_json_path = sys.argv[6]
-    edge_label_json_path = sys.argv[7]

@@ -15,6 +15,52 @@ import traceback
 import numpy as np
 
 
+def judgeClass(symbol, node_class_pd):
+    sort_dict = {}
+    for strokeid in symbol:
+        node_pd = node_class_pd[strokeid]
+        if node_pd in sort_dict:
+            sort_dict[node_pd] += 1
+        else:
+            sort_dict[node_pd] = 1
+    result = sorted(sort_dict.items(), key=lambda i: i[1])
+    return result[-1]
+
+
+def maxXmaxY(stroke_x, stroke_y):
+    max_x = max(stroke_x)
+    max_y = max(stroke_y)
+    min_x = min(stroke_x)
+    min_y = min(stroke_y)
+
+
+def _processRestore(all_trace, symbol, idx2originid):
+    for strokeid in symbol:
+        x, y = zip(*all_trace[idx2originid[strokeid]]["coords"])
+
+
+def GraphicRestore(all_trace, node_class_pd, group_list, node_label_2_id, idx2originid):
+    svg_result = []
+    for symbol in group_list:
+        node_pd = judgeClass(symbol, node_class_pd)
+        if node_pd == node_label_2_id["connection"]:
+            color = "#054E9F"
+        elif node_pd == node_label_2_id["arrow"]:
+            color = "#F2A90D"
+        elif node_pd == node_label_2_id["data"]:
+            color = "#F20D43"
+        elif node_pd == node_label_2_id["text"]:
+            color = "#F20DC4"
+        elif node_pd == node_label_2_id["process"]:
+            _processRestore(all_trace, symbol, idx2originid)
+        elif node_pd == node_label_2_id["terminator"]:
+            color = "#0D23F2"
+        elif node_pd == node_label_2_id["decision"]:
+            color = "#0DDFF2"
+        else:
+            raise Exception('error node label type')
+
+
 def test_gat_cora(config):
     global BEST_VAL_PERF, BEST_VAL_LOSS
 
@@ -95,6 +141,7 @@ def test_gat_cora(config):
                 label_already_dict = {}
                 for j, node_pd in enumerate(diagram):
                     x, y = zip(*all_trace[idx2originid[str(j)]]["coords"])
+                    # print("node_pd", node_pd)
                     if node_pd == node_label_2_id["connection"]:
                         color = "#054E9F"
                     elif node_pd == node_label_2_id["arrow"]:
@@ -111,6 +158,7 @@ def test_gat_cora(config):
                         color = "#0DDFF2"
                     else:
                         raise Exception('error node label type')
+
                     if not id_2_node_label[node_pd.item()] in label_already_dict:
                         plt.plot(x, y, linewidth=2, c=color, label=id_2_node_label[node_pd.item()])
                         label_already_dict[id_2_node_label[node_pd.item()]] = 1
@@ -120,30 +168,6 @@ def test_gat_cora(config):
                 plt.savefig(os.path.join(config["node_pic_path"], valid_file_name[i][:-5]) + ".jpg")
                 plt.gcf().clear()
 
-                # =========== old edge classification =========
-                # plt.gca().invert_yaxis()
-                # group_list = []
-                # already_group = {}
-                # for j, i_edges in enumerate(edge_class_pd_list[i]):
-                # for j, i_edges in enumerate(valid_edge_label[i]):
-                #     if j not in already_group:
-                #         temp_group = [j]
-                #         already_group[j] = 1
-                #         for k, _ in enumerate(i_edges):
-                #             temp_item = _.item()
-                #             if temp_item == 1:
-                #                 temp_group.append(k)
-                #                 already_group[k] = 1
-                #         group_list.append(temp_group)
-                #
-                # for temp_group in group_list:
-                #     color = np.random.rand(3, )
-                #     for stroke_id in temp_group:
-                #         x, y = zip(*all_trace[idx2originid[str(stroke_id)]]["coords"])
-                #         plt.plot(x, y, linewidth=2, c=color)
-                # plt.savefig(os.path.join(config["edge_pic_path"], valid_file_name[i][:-5]) + ".jpg")
-                # plt.gcf().clear()
-                # =========== new edge classification =========
                 edge_matrix = np.zeros(shape=valid_edge_connections[i].shape)
                 assert len(edge_class_pd_list[i]) == len(valid_sparse_edge_indexs[i])
                 group_list = []
@@ -157,20 +181,20 @@ def test_gat_cora(config):
 
                         if temp_x in already_dict and temp_y in already_dict:
                             if already_dict[temp_x] != already_dict[temp_y]:
-                                group_list[already_dict[temp_x]].extend(group_list[already_dict[temp_y]])
-                                for group_item in group_list[already_dict[temp_y]]:
-                                    already_dict[group_item] = already_dict[temp_x]
+                                group_list[already_dict[temp_x]].update(group_list[already_dict[temp_y]])
+                                for k, v in group_list[already_dict[temp_y]].items():
+                                    already_dict[k] = already_dict[temp_x]
                         else:
                             if temp_x in already_dict:
-                                group_list[already_dict[temp_x]].append(temp_y)
+                                group_list[already_dict[temp_x]][temp_y] = 1
                                 already_dict[temp_y] = already_dict[temp_x]
                             if temp_y in already_dict:
-                                group_list[already_dict[temp_y]].append(temp_x)
+                                group_list[already_dict[temp_y]][temp_x] = 1
                                 already_dict[temp_x] = already_dict[temp_y]
                             if temp_x not in already_dict and temp_y not in already_dict:
                                 already_dict[temp_x] = len(group_list)
                                 already_dict[temp_y] = len(group_list)
-                                group_list.append([temp_x, temp_y])
+                                group_list.append({temp_x: 1, temp_y: 1})
 
                         abc += 1
                         # if abc >= 10:
@@ -178,19 +202,19 @@ def test_gat_cora(config):
 
                 plt.gca().invert_yaxis()
                 pic_already_dict = {}
-
-                for temp_group in group_list:
-
-                    color = np.random.rand(3, )
-                    for stroke_id in temp_group:
-                        if stroke_id not in pic_already_dict:
-                            x, y = zip(*all_trace[idx2originid[str(stroke_id)]]["coords"])
-                            plt.plot(x, y, linewidth=2, c=color)
-                    pic_already_dict[already_dict[temp_group[0]]] = 1
+                for group_index, temp_group in enumerate(group_list):
+                    if group_index == already_dict[sorted(temp_group.items(), key=lambda item: item[1])[0][0]]:
+                        if group_index not in pic_already_dict:
+                            color = np.random.rand(3, )
+                            for stroke_id in temp_group:
+                                x, y = zip(*all_trace[idx2originid[str(stroke_id)]]["coords"])
+                                plt.plot(x, y, linewidth=2, c=color)
+                            pic_already_dict[group_index] = 1
 
                 plt.savefig(os.path.join(config["edge_pic_path"], valid_file_name[i][:-5]) + ".jpg")
                 plt.gcf().clear()
 
+                # GraphicRestore(all_trace, diagram, group_list, node_label_2_id, idx2originid)
         except Exception as e:  # "patience has run out" exception :O
             traceback.print_exc()
 
@@ -229,20 +253,6 @@ def get_training_args():
 
     # Model architecture related
     # INSTGNN
-    # instgnn_config = {
-    #     "num_of_layers": 3,  # GNNs, contrary to CNNs, are often shallow (it ultimately depends on the graph properties)
-    #     "num_of_joint_learning_layers": 1,
-    #     "num_heads_per_layer": [8, 8, 8],
-    #     "num_features_per_layer": [SOGOU_NUM_INPUT_FEATURES, 32, 32, 32],
-    #     "jll_num_heads_per_layer": [8, 1],
-    #     "jll_num_features_per_layer": [32, SOGOU_NUM_CLASSES],
-    #     "num_edge_features_per_layer": SOGOU_NUM_INPUT_EDGE_FEATURES,
-    #     "jll_edge_num_features": [SOGOU_NUM_INPUT_EDGE_FEATURES, SOGOU_EDGE_NUM_CLASS],
-    #     "add_skip_connection": False,  # hurts perf on Cora
-    #     "bias": True,  # result is not so sensitive to bias
-    #     "dropout": 0.1,  # result is sensitive to dropout
-    #     "layer_type": LayerType.IMP2  # fastest implementation enabled by default
-    # }
 
     instgnn_config = {
         "num_of_layers": 3,  # GNNs, contrary to CNNs, are often shallow (it ultimately depends on the graph properties)

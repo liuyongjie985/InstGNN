@@ -62,7 +62,6 @@ for list_item in traces_data:
     temp_list = list_item["trace_group"]
     for stroke in temp_list:
         x, y = zip(*stroke)
-
         if temp_label == "connection":
             color = "#054E9F"
         elif temp_label == "arrow":
