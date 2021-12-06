@@ -12,7 +12,8 @@ from utils import getConvexHullArea, getCircularVariance, minimalEuclideanDistan
     getEuclideanDistance, ioulike, MedianFinder, getAllStrokePairDistance, edgeFeatureStandardization, \
     nodeFeatureStandardization, stroke_points_resample, isStrokeInGroup
 
-"trace_data: list of [{'label': label, 'trace_group': traces_curr, 'trace_id': traces_id}]"
+
+# "trace_data: list of [{'label': label, 'trace_group': traces_curr, 'trace_id': traces_id}]"
 
 
 def label_align(temp_label):
@@ -20,12 +21,18 @@ def label_align(temp_label):
         return "terminator"
     if temp_label == "rounded":
         return "terminator"
+    if temp_label == "ellipse":
+        return "terminator"
+
     return temp_label
 
 
 def get_TX_traces_data(json_file_abs_path, doc_namespace="{http://www.w3.org/2003/InkML}"):
     traces_data = []
     trace_json = json.load(open(json_file_abs_path))
+    if not os.path.exists(json_file_abs_path[:-5] + ".label"):
+        return [], []
+
     traces_all = []
     for i, stroke in enumerate(trace_json):
         temp_list = []
@@ -81,13 +88,24 @@ def get_TX_traces_data(json_file_abs_path, doc_namespace="{http://www.w3.org/200
     new_traces_all = []
 
     # ==============================确认group_id中没有noise id 以及 未被框选到的stroke id===============================
-    for i, stroke in enumerate(traces_all):
-        if i not in noise_list and i in already_dict:
-            pass
-        else:
-            for temp_result in traces_data:
-                for j, stroke_id in enumerate(temp_result["trace_id"]):
-                    assert i != stroke_id
+    new_traces_data = []
+
+    for k, temp_result in enumerate(traces_data):
+        new_temp_result = {}
+        new_temp_result["trace_id"] = []
+        new_temp_result["trace_group"] = []
+
+        for j, stroke_id in enumerate(temp_result["trace_id"]):
+            if stroke_id in noise_list or stroke_id not in already_dict:
+                pass
+            else:
+                new_temp_result["label"] = temp_result["label"]
+                new_temp_result["trace_id"].append(temp_result["trace_id"][j])
+                new_temp_result["trace_group"].append(temp_result["trace_id"][j])
+        if len(new_temp_result["trace_id"]) > 0:
+            new_traces_data.append(new_temp_result)
+
+    traces_data = new_traces_data
     # ========================================================================================================================
     offset = 0
     indeed_i = 0
@@ -589,13 +607,14 @@ def inkml2img(input_file, output_json_file, output_pic_file, output_node_feature
     else:
         traces = []
         group_data = []
-
+    if len(traces) == 0 and len(group_data) == 0:
+        return
     json.dump(traces, open(output_json_file, "w"), indent=4)
     strokes_feature, strokes_label, edge_feature_matrix, edge_label, remove_id_map = graph_build(traces, group_data)
-    print("len(strokes_feature)", len(strokes_feature))
-    print("len(strokes_label)", len(strokes_label))
-    print("len(edge_feature_matrix)", len(edge_feature_matrix))
-    print("len(edge_label)", len(edge_label))
+    # print("len(strokes_feature)", len(strokes_feature))
+    # print("len(strokes_label)", len(strokes_label))
+    # print("len(edge_feature_matrix)", len(edge_feature_matrix))
+    # print("len(edge_label)", len(edge_label))
     assert len(strokes_feature) == len(strokes_label) == len(edge_feature_matrix) == len(edge_label)
     json.dump(strokes_feature, open(output_node_feature_file, "w"), indent=4)
     json.dump(strokes_label, open(output_node_label_file, "w"), indent=4)
@@ -622,7 +641,7 @@ def inkml2img(input_file, output_json_file, output_pic_file, output_node_feature
                 else:
                     x = []
                     y = []
-                temp_strokes_label = strokes_label[remove_id_map[stroke_id[i]]][1]
+                temp_strokes_label = strokes_label[remove_id_map[stroke_id[i]]][1].lower()
                 print("temp_strokes_label", temp_strokes_label)
                 if temp_strokes_label == "connection":
                     color = "#054E9F"
@@ -656,21 +675,32 @@ if __name__ == "__main__":
     edge_label_json_path = sys.argv[7]
     id2originid_json_path = sys.argv[8]
     data_type = sys.argv[9]
-
+    count = 0
     for parent, dirnames, filenames in os.walk(input_inkml, followlinks=True):
         for filename in filenames:
             if (filename[-6:] == ".inkml" and (data_type == "FC" or data_type == "FC_A")) or (
                     filename[-5:] == ".json" and data_type == "TS"):
+
+                suffix_index = 5
+                if filename[-6:] == ".inkml":
+                    suffix_index = 6
+
                 file_path = os.path.join(parent, filename)
                 print("file_path", file_path)
-                output_json_file = os.path.join(output_json_path, filename[:-6]) + ".json"
-                output_pic_file = os.path.join(output_pic_path, filename[:-6]) + ".jpg"
-                output_node_feature_file = os.path.join(node_feature_json_path, filename[:-6]) + ".json"
-                output_node_label_file = os.path.join(node_label_json_path, filename[:-6]) + ".json"
-                output_edge_feature_file = os.path.join(edge_feature_json_path, filename[:-6]) + ".json"
-                output_edge_label_file = os.path.join(edge_label_json_path, filename[:-6]) + ".json"
-                output_id2originid_file = os.path.join(id2originid_json_path, filename[:-6] + ".json")
+                output_json_file = os.path.join(output_json_path, str(count) + "_" + filename[:-suffix_index]) + ".json"
+                output_pic_file = os.path.join(output_pic_path, str(count) + "_" + filename[:-suffix_index]) + ".jpg"
+                output_node_feature_file = os.path.join(node_feature_json_path,
+                                                        str(count) + "_" + filename[:-suffix_index]) + ".json"
+                output_node_label_file = os.path.join(node_label_json_path,
+                                                      str(count) + "_" + filename[:-suffix_index]) + ".json"
+                output_edge_feature_file = os.path.join(edge_feature_json_path,
+                                                        str(count) + "_" + filename[:-suffix_index]) + ".json"
+                output_edge_label_file = os.path.join(edge_label_json_path,
+                                                      str(count) + "_" + filename[:-suffix_index]) + ".json"
+                output_id2originid_file = os.path.join(id2originid_json_path,
+                                                       str(count) + "_" + filename[:-suffix_index] + ".json")
                 inkml2img(file_path, output_json_file, output_pic_file, output_node_feature_file,
                           output_node_label_file, output_edge_feature_file, output_edge_label_file,
                           output_id2originid_file, data_type,
                           color='#284054', pt=True)
+                count += 1
