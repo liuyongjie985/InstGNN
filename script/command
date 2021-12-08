@@ -1,5 +1,7 @@
 mkdir edge_feature_json
 mkdir edge_label_json
+mkdir id2originid_json
 mkdir node_feature_json
 mkdir node_label_json
-mkdir id2originid_json
+mkdir TS_JSON
+mkdir TS_PIC

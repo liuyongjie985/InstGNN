@@ -1,8 +1,12 @@
-import sys
+import argparse
 import os
 import random
 
-base_path = "/home/liuyongjie/InstGNN/data/sogou_tencent"
+args = argparse.ArgumentParser()
+args.add_argument("--base_path", type=str, required=True)
+args.add_argument("--test_num", type=int, required=True)
+args = args.parse_args()
+base_path = args.base_path
 total_list = [base_path]
 train_list = [base_path + "/train"]
 valid_list = [base_path + "/valid"]
@@ -14,7 +18,7 @@ for x in total_list:
                 file_prefix = filename[:-5]
                 all_file_list.append(file_prefix)
 
-TEST_NUM = 30
+TEST_NUM = args.test_num
 random.shuffle(all_file_list)
 i = 0
 for f in all_file_list:

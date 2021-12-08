@@ -704,3 +704,5 @@ if __name__ == "__main__":
                           output_id2originid_file, data_type,
                           color='#284054', pt=True)
                 count += 1
+
+    print("总流程图数量", count)
