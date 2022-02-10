@@ -235,7 +235,15 @@ def sogou_load_node_feature(node_feature_path, device):
             if filename[-5:] == ".json":
                 file_path = os.path.join(parent, filename)
                 temp_node_feature = json.load(open(file_path))
-                temp_node_feature = torch.tensor(temp_node_feature, device=device)
+                temp_node_feature = torch.tensor(temp_node_feature, device=device, dtype=torch.float32)
+                # print(temp_node_feature.type())
+                # if temp_node_feature.type() == "torch.cuda.FloatTensor":
+                #     print("is float")
+                # else:
+                #     print("temp_node_feature", temp_node_feature)
+                #     print(temp_node_feature.type())
+                #     exit()
+
                 # print("temp_node_feature.shape", temp_node_feature.shape)
                 node_feature_list.append(temp_node_feature)
                 file_name_list.append(filename)
@@ -256,7 +264,7 @@ def sogou_load_node_label(node_label_path, label_dict, device):
                     #     temp_list.append(label_dict[single_node_label[1]])
                     # else:
                     #     label_dict[single_node_label[1]] = len(label_dict)
-                    temp_list.append(label_dict[single_node_label[1]])
+                    temp_list.append(label_dict[single_node_label[1].lower()])
                 temp_tensor = torch.tensor(temp_list, dtype=torch.long,
                                            device=device)  # Cross entropy expects a long int
                 # print("temp_tensor.shape", temp_tensor.shape)

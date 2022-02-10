@@ -6,11 +6,11 @@ import sys
 import os
 import traceback
 
-from utils import getConvexHullArea, getCircularVariance, minimalEuclideanDistanceBetweenStroke, \
+from global_utils import getConvexHullArea, getCircularVariance, minimalEuclideanDistanceBetweenStroke, \
     getStrokeLength, \
     pairStrokeDistance, getAllStrokeLength, getEuclideanDistance, ioulike, pairStrokeDistance, getAllStrokeLength, \
     getEuclideanDistance, ioulike, MedianFinder, getAllStrokePairDistance, edgeFeatureStandardization, \
-    nodeFeatureStandardization, stroke_points_resample, isStrokeInGroup
+    nodeFeatureStandardization, stroke_points_resample, isStrokeInGroup, normTotal
 
 
 # "trace_data: list of [{'label': label, 'trace_group': traces_curr, 'trace_id': traces_id}]"
@@ -457,16 +457,20 @@ def graph_build(traces, group_data):
         assert len(temp_stroke_feature) == 27
         strokes_feature.append(temp_stroke_feature)
         all_stroke_bbox.append(bbox)
-
+    # 单独再加一个全为0的笔画，解决batchnorm不能处理单笔划的问题
+    # strokes_feature.append([0 for x in range(27)])
     for x in strokes_feature:
         x[11] /= md.getMid()
         x[12] /= md.getMid()
 
     edge_feature_matrix = []
     for i, stroke in enumerate(all_traces):
+        # temp_list = [None for x in all_traces] + [None]
         temp_list = [None for x in all_traces]
         edge_feature_matrix.append(temp_list)
 
+    # temp_list = [None for x in all_traces] + [None]
+    # edge_feature_matrix.append(temp_list)
     # edge_feature deal
     for i, stroke in enumerate(all_traces):
         # temporal edge
@@ -492,8 +496,7 @@ def graph_build(traces, group_data):
     # strokes_feature N*26
     stroke2label = sorted(stroke2label.items(), key=lambda i: i[0])
 
-    return nodeFeatureStandardization(strokes_feature), stroke2label, edgeFeatureStandardization(
-        edge_feature_matrix), group_matrix, remove_id_map
+    return strokes_feature, stroke2label, edge_feature_matrix, group_matrix, remove_id_map
 
 
 def getStrokePairEdgeFeature(stroke1_index, stroke2_index, all_traces, distance_matrix, all_stroke_bbox,
@@ -595,8 +598,7 @@ def getStrokePairEdgeFeature(stroke1_index, stroke2_index, all_traces, distance_
     return temp_edge_feature
 
 
-def inkml2img(input_file, output_json_file, output_pic_file, output_node_feature_file, output_node_label_file,
-              output_edge_feature_file, output_edge_label_file, output_id2originid_file, data_type, color='black',
+def inkml2img(all_diagram_feature, input_file, output_json_file, output_pic_file, data_type, color='black',
               pt=False):
     if data_type == "FC_A":
         traces, group_data = get_traces_data(input_file)
@@ -615,15 +617,9 @@ def inkml2img(input_file, output_json_file, output_pic_file, output_node_feature
     # print("len(strokes_label)", len(strokes_label))
     # print("len(edge_feature_matrix)", len(edge_feature_matrix))
     # print("len(edge_label)", len(edge_label))
+
     assert len(strokes_feature) == len(strokes_label) == len(edge_feature_matrix) == len(edge_label)
-    json.dump(strokes_feature, open(output_node_feature_file, "w"), indent=4)
-    json.dump(strokes_label, open(output_node_label_file, "w"), indent=4)
-    json.dump(edge_feature_matrix, open(output_edge_feature_file, "w"), indent=4)
-    json.dump(edge_label, open(output_edge_label_file, "w"), indent=4)
-    id2origin = {}
-    for k, v in remove_id_map.items():
-        id2origin[v] = k
-    json.dump(id2origin, open(output_id2originid_file, "w"), indent=4)
+    all_diagram_feature.append([strokes_feature, strokes_label, edge_feature_matrix, edge_label, remove_id_map])
 
     if pt:
         plt.gca().invert_yaxis()
@@ -676,15 +672,16 @@ if __name__ == "__main__":
     id2originid_json_path = sys.argv[8]
     data_type = sys.argv[9]
     count = 0
+    all_diagram_feature = []
+    all_output = []
+    ori_length = 0
     for parent, dirnames, filenames in os.walk(input_inkml, followlinks=True):
         for filename in filenames:
             if (filename[-6:] == ".inkml" and (data_type == "FC" or data_type == "FC_A")) or (
                     filename[-5:] == ".json" and data_type == "TS"):
-
                 suffix_index = 5
                 if filename[-6:] == ".inkml":
                     suffix_index = 6
-
                 file_path = os.path.join(parent, filename)
                 print("file_path", file_path)
                 output_json_file = os.path.join(output_json_path, str(count) + "_" + filename[:-suffix_index]) + ".json"
@@ -699,10 +696,27 @@ if __name__ == "__main__":
                                                       str(count) + "_" + filename[:-suffix_index]) + ".json"
                 output_id2originid_file = os.path.join(id2originid_json_path,
                                                        str(count) + "_" + filename[:-suffix_index] + ".json")
-                inkml2img(file_path, output_json_file, output_pic_file, output_node_feature_file,
-                          output_node_label_file, output_edge_feature_file, output_edge_label_file,
-                          output_id2originid_file, data_type,
-                          color='#284054', pt=True)
+
+                inkml2img(all_diagram_feature, file_path, output_json_file, output_pic_file, data_type, color='#284054',
+                          pt=False)
+                if len(all_diagram_feature) == ori_length + 1:
+                    all_output.append([output_node_feature_file,
+                                       output_node_label_file, output_edge_feature_file, output_edge_label_file,
+                                       output_id2originid_file])
+                    ori_length = len(all_diagram_feature)
                 count += 1
+    assert len(all_diagram_feature) == len(all_output)
+    all_diagram_feature = normTotal(all_diagram_feature)
+    for i, all_item in enumerate(
+            all_diagram_feature):
+        strokes_feature, strokes_label, edge_feature_matrix, edge_label, remove_id_map = all_item
+        json.dump(strokes_feature, open(all_output[i][0], "w"), indent=4)
+        json.dump(strokes_label, open(all_output[i][1], "w"), indent=4)
+        json.dump(edge_feature_matrix, open(all_output[i][2], "w"), indent=4)
+        json.dump(edge_label, open(all_output[i][3], "w"), indent=4)
+        id2origin = {}
+        for k, v in remove_id_map.items():
+            id2origin[v] = k
+        json.dump(id2origin, open(all_output[i][4], "w"), indent=4)
 
     print("总流程图数量", count)

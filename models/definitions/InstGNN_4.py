@@ -252,7 +252,11 @@ class JointLearningLayer(torch.nn.Module):
             out_edges_features += self.edge_skip_proj(sparse_edge_features)
 
         if not (self.activation is None):
+            second_dim = out_edges_features.shape[-1]
+            padding_vec = torch.zeros([1, second_dim]).cuda()
+            out_edges_features = torch.cat([out_edges_features, padding_vec], dim=0)
             out_edges_features = self.norm_edge(out_edges_features)
+            out_edges_features = out_edges_features[:-1]
 
         out_edges_features = out_edges_features if self.activation is None else self.activation(out_edges_features)
         # N * N * FIN
@@ -292,7 +296,11 @@ class JointLearningLayer(torch.nn.Module):
             out_nodes_features = out_nodes_features.mean(dim=self.head_dim)
 
         if not (self.activation is None):
+            second_dim = out_nodes_features.shape[-1]
+            padding_vec = torch.zeros([1, second_dim]).cuda()
+            out_nodes_features = torch.cat([out_nodes_features, padding_vec], dim=0)
             out_nodes_features = self.norm_node(out_nodes_features)
+            out_nodes_features = out_nodes_features[:-1]
 
         if self.bias is not None:
             out_nodes_features += self.bias
@@ -421,7 +429,13 @@ class InstGNNLayer(torch.nn.Module):
         else:
             # shape = (N, NH, FOUT) -> (N, FOUT)
             out_nodes_features = out_nodes_features.mean(dim=self.head_dim)
+
+        second_dim = out_nodes_features.shape[-1]
+        padding_vec = torch.zeros([1, second_dim]).cuda()
+        out_nodes_features = torch.cat([out_nodes_features, padding_vec], dim=0)
         out_nodes_features = self.norm(out_nodes_features)
+        out_nodes_features = out_nodes_features[:-1]
+
         if self.bias is not None:
             out_nodes_features += self.bias
 

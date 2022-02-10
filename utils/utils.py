@@ -145,6 +145,7 @@ def get_instgnn4_main_loop(config, instgnn, cross_entropy_loss, mse_loss, optimi
             # 0.99797 in this case, and the loss will be -log(0.99797). It does this for every node and applies a mean.
             # You can see that as the probability of the correct class for most nodes approaches 1 we get to 0 loss! <3
             cross_entropy_loss.weight = None
+            # out_nodes_features = out_nodes_features[:-1]
             loss_nc = cross_entropy_loss(out_nodes_features, gt_node_labels)
 
             # Undirected graph require diagonal matrix
@@ -161,6 +162,10 @@ def get_instgnn4_main_loop(config, instgnn, cross_entropy_loss, mse_loss, optimi
 
             cross_entropy_loss.weight = torch.tensor(np.array([weight0.cpu(), weight1.cpu()]), device=device,
                                                      dtype=torch.float32)
+
+            # print("out_edges_features.shape", out_edges_features.shape)
+            # print("gt_edge_labels", gt_edge_labels)
+
             loss_ec = cross_entropy_loss(out_edges_features, gt_edge_labels)
 
             loss = loss_ec + loss_nc

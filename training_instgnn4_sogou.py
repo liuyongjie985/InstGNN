@@ -181,7 +181,6 @@ def get_training_args():
 
     # Add additional config information
     training_config.update(instgnn_config)
-
     return training_config
 
 

@@ -139,6 +139,7 @@ def test_gat_cora(config):
                 all_trace = json.load(open(os.path.join(config["trace_path"], valid_file_name[i])))
                 plt.gca().invert_yaxis()
                 label_already_dict = {}
+                # print("node_class_predictions",diagram)
                 for j, node_pd in enumerate(diagram):
                     x, y = zip(*all_trace[idx2originid[str(j)]]["coords"])
                     # print("node_pd", node_pd)
@@ -173,6 +174,7 @@ def test_gat_cora(config):
                 group_list = []
                 already_dict = {}
                 abc = 0
+                # print("edge_class_predictions",edge_class_pd_list[i])
                 # for j, i_sparse_edges in enumerate(valid_sparse_edge_labels[i]):
                 for j, i_sparse_edges in enumerate(edge_class_pd_list[i]):
                     if i_sparse_edges == 1:
@@ -202,6 +204,8 @@ def test_gat_cora(config):
 
                 plt.gca().invert_yaxis()
                 pic_already_dict = {}
+                # print("group_list", group_list)
+                # print("already_dict", already_dict)
                 for group_index, temp_group in enumerate(group_list):
                     if group_index == already_dict[sorted(temp_group.items(), key=lambda item: item[1])[0][0]]:
                         if group_index not in pic_already_dict:
@@ -253,6 +257,20 @@ def get_training_args():
 
     # Model architecture related
     # INSTGNN
+    # instgnn_config = {
+    #     "num_of_layers": 3,  # GNNs, contrary to CNNs, are often shallow (it ultimately depends on the graph properties)
+    #     "num_of_joint_learning_layers": 1,
+    #     "num_heads_per_layer": [8, 8, 8],
+    #     "num_features_per_layer": [SOGOU_NUM_INPUT_FEATURES, 32, 32, 32],
+    #     "jll_num_heads_per_layer": [8, 1],
+    #     "jll_num_features_per_layer": [32, SOGOU_NUM_CLASSES],
+    #     "num_edge_features_per_layer": SOGOU_NUM_INPUT_EDGE_FEATURES,
+    #     "jll_edge_num_features": [SOGOU_NUM_INPUT_EDGE_FEATURES, SOGOU_EDGE_NUM_CLASS],
+    #     "add_skip_connection": False,  # hurts perf on Cora
+    #     "bias": True,  # result is not so sensitive to bias
+    #     "dropout": 0.1,  # result is sensitive to dropout
+    #     "layer_type": LayerType.IMP2  # fastest implementation enabled by default
+    # }
 
     instgnn_config = {
         "num_of_layers": 3,  # GNNs, contrary to CNNs, are often shallow (it ultimately depends on the graph properties)
